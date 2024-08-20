@@ -16,10 +16,26 @@ function check_homebrew() {
     if ! command -v brew &> /dev/null; then
         echo "Homebrew not found. Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        if [ $? -eq 0 ]; then
+            echo "Homebrew installed successfully."
+
+            # Get the current user's home directory
+            USER_HOME=$(eval echo ~$USER)
+
+            # Append the necessary configuration to the user's profile
+            echo 'eval "$(/usr/local/bin/brew shellenv)"' >> "$USER_HOME/.profile"
+            eval "$(/usr/local/bin/brew shellenv)"
+
+            echo "Homebrew environment set up for the current session."
+        else
+            echo "Homebrew installation failed. Exiting."
+            exit 1
+        fi
     else
         echo "Homebrew is already installed."
     fi
 }
+
 
 function install_dependencies() {
     echo "Tapping d235j/ios-restore-tools..."
@@ -385,16 +401,17 @@ function restore_homepod() {
 
 # Main script
 
+
+echo "Checking for Homebrew..."
+check_homebrew
+
+echo "Installing dependencies..."
+install_dependencies
+
 echo "Checking for existing output IPSW..."
 if [ -f "$OUTPUT_IPSW" ]; then
     echo "Existing output IPSW found at $OUTPUT_IPSW. Skipping download and assembly."
 else
-
-    echo "Checking for Homebrew..."
-    check_homebrew
-
-    echo "Installing dependencies..."
-    install_dependencies
 
     echo "Checking and downloading necessary files..."
     check_and_download_files
