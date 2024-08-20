@@ -390,18 +390,18 @@ if [ -f "$OUTPUT_IPSW" ]; then
     echo "Existing output IPSW found at $OUTPUT_IPSW. Skipping download and assembly."
 else
 
-echo "Checking for Homebrew..."
-check_homebrew
+    echo "Checking for Homebrew..."
+    check_homebrew
 
-echo "Installing dependencies..."
-install_dependencies
+    echo "Installing dependencies..."
+    install_dependencies
 
-echo "Checking and downloading necessary files..."
-check_and_download_files
+    echo "Checking and downloading necessary files..."
+    check_and_download_files
 
-echo "Creating IPSW file..."
-create_ipsw "$OTA_ZIP" "$IPSW_FILE" "$OUTPUT_IPSW" "$KEYS_ZIP"
-
+    echo "Creating IPSW file..."
+    create_ipsw "$OTA_ZIP" "$IPSW_FILE" "$OUTPUT_IPSW" "$KEYS_ZIP"
+fi
 echo "Restoring HomePod..."
 restore_homepod
 
