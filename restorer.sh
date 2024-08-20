@@ -6,7 +6,7 @@ IPSW_URL="https://updates.cdn-apple.com/2024SummerFCS/fullrestores/052-80874/C17
 DOWNLOADS_DIR="$HOME/Downloads"
 OTA_ZIP="$DOWNLOADS_DIR/434325375ab97e7714acfa0bf7e93447ee45c3a7.zip"
 IPSW_FILE="$DOWNLOADS_DIR/21M71.ipsw"
-OUTPUT_IPSW="$DOWNLOADS_DIR/custom_homepod.ipsw"
+OUTPUT_IPSW="$DOWNLOADS_DIR/17.6.ipsw"
 BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "idevicerestore" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
 KEYS_URL="https://github.com/UnbendableStraw/homepod-restore/raw/main/_keys_17.5_and_17.6.zip"
 KEYS_ZIP="$DOWNLOADS_DIR/_keys_17.5_and_17.6.zip"
@@ -384,6 +384,12 @@ function restore_homepod() {
 }
 
 # Main script
+
+echo "Checking for existing output IPSW..."
+if [ -f "$OUTPUT_IPSW" ]; then
+    echo "Existing output IPSW found at $OUTPUT_IPSW. Skipping download and assembly."
+else
+
 echo "Checking for Homebrew..."
 check_homebrew
 
