@@ -7,3 +7,4 @@
 chmod +x /path/to/tool
 ```
 4. Double click the executable and agree to run unverified app
+5. When assembling an IPSW file, you will be prompted for your password inside the Terminal window, not the app. This will be fixed soon.
