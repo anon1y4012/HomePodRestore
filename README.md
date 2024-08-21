@@ -22,7 +22,8 @@ First, clone the repository to your local machine:
 
 ```bash
 git clone https://github.com/yourusername/HomePodRestoreTool.git
-cd HomePodRestoreTool```
+cd HomePodRestoreTool
+```
 
 ### 2. Running the Setup Script (Recommended)
 
@@ -101,7 +102,7 @@ If you encounter any issues, please open an issue on the [GitHub repository](htt
 
 ## Contributing
 
-We welcome contributions! If you have any improvements or features to add, feel free to fork this repository, make your changes, and submit a pull request.
+I welcome contributions! If you have any improvements or features to add, feel free to fork this repository, make your changes, and submit a pull request.
 
 ## License
 
