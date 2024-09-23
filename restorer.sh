@@ -1,18 +1,32 @@
 #!/bin/bash
 
+# Color variables
+YELLOW='\033[1;33m'
+GREEN='\033[1;32m'
+RESET='\033[0m'  # Reset to default color
+
 # Variables
-OTA_URL="https://updates.cdn-apple.com/2024SummerFCS/patches/052-80875/A1DC193D-202E-4051-8A46-EDA77D3243EF/com_apple_MobileAsset_SoftwareUpdate/434325375ab97e7714acfa0bf7e93447ee45c3a7.zip"
-IPSW_URL="https://updates.cdn-apple.com/2024SummerFCS/fullrestores/052-80874/C1704385-4B55-4D46-B8DE-D3A6DA3AE514/AppleTV5,3_17.6_21M71_Restore.ipsw"
 DOWNLOADS_DIR="$HOME/Downloads"
-OTA_ZIP="$DOWNLOADS_DIR/434325375ab97e7714acfa0bf7e93447ee45c3a7.zip"
-IPSW_FILE="$DOWNLOADS_DIR/21M71.ipsw"
-OUTPUT_IPSW="$DOWNLOADS_DIR/17.6.ipsw"
+IPSW_FILE_PATH=""
+
+# Pre-defined IPSW path stored within the script
+CURRENT_IPSW_PATH="/Users/john/Downloads/17.6.ipsw"
+
 BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "idevicerestore" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
-KEYS_URL="https://github.com/UnbendableStraw/homepod-restore/raw/main/_keys_17.5_and_17.6.zip"
-KEYS_ZIP="$DOWNLOADS_DIR/_keys_17.5_and_17.6.zip"
+
+# Function to trap CTRL+C and return to the main menu
+trap ctrl_c INT
+
+# CTRL+C handler to return to the main menu
+function ctrl_c() {
+    echo -e "\n${YELLOW}Process interrupted. Returning to the main menu...${RESET}"
+    sleep 3
+    show_menu
+}
 
 # Functions
 function check_homebrew() {
+    echo -e "${YELLOW}Press CTRL+C at any time to return to the main menu.${RESET}"
     if ! command -v brew &> /dev/null; then
         echo "Homebrew not found. Installing Homebrew..."
         /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -34,10 +48,13 @@ function check_homebrew() {
     else
         echo "Homebrew is already installed."
     fi
+    echo "Returning to the main menu..."
+    sleep 3
+    show_menu  # Return to the main menu
 }
 
-
 function install_dependencies() {
+    echo -e "${YELLOW}Press CTRL+C at any time to return to the main menu.${RESET}"
     echo "Tapping d235j/ios-restore-tools..."
     brew tap d235j/ios-restore-tools
 
@@ -49,377 +66,208 @@ function install_dependencies() {
             echo "$dep is already installed."
         fi
     done
+    echo "Returning to the main menu..."
+    show_menu  # Return to the main menu
 }
 
-function check_and_download_files() {
-    # Function to get the file size on macOS
-    get_file_size() {
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            stat -f%z "$1"
+# Function to prompt for an IPSW file path and store it within the script
+function prompt_for_ipsw_path() {
+    echo "Please drag and drop the IPSW file into this window and press Enter."
+    read -r IPSW_FILE_PATH
+
+    if [[ ! -f "$IPSW_FILE_PATH" ]]; then
+        echo "File does not exist at $IPSW_FILE_PATH. Please check the path and try again."
+        prompt_for_ipsw_path
+    else
+        echo "IPSW file path stored: $IPSW_FILE_PATH"
+        update_script_with_ipsw_path "$IPSW_FILE_PATH"
+    fi
+}
+
+# Function to update the script with the new IPSW file path
+function update_script_with_ipsw_path() {
+    local new_path="$1"
+    
+    # Escape slashes for use in sed
+    escaped_new_path=$(echo "$new_path" | sed 's/\//\\\//g')
+
+    # Use sed to replace the CURRENT_IPSW_PATH with the new path
+    sed -i '' "s|^CURRENT_IPSW_PATH=.*|CURRENT_IPSW_PATH=\"$escaped_new_path\"|" "$0"
+    
+    echo -e "${GREEN}IPSW file path successfully updated to: $new_path${RESET}"
+}
+
+
+# Function to retrieve the stored IPSW path or prompt for it if not found
+function get_ipsw_path() {
+    if [[ -f "$IPSW_PATH_FILE" ]]; then
+        IPSW_FILE_PATH=$(cat "$IPSW_PATH_FILE")
+        # Ensure the path exists and is valid
+        if [[ ! -f "$IPSW_FILE_PATH" ]]; then
+            echo "The stored IPSW path is invalid or the file does not exist."
+            prompt_for_ipsw_path
         else
-            stat -c%s "$1"
-        fi
-    }
-
-    # Function to check the MD5 checksum
-    verify_md5() {
-        local file=$1
-        local expected_md5=$2
-        local actual_md5
-
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-            actual_md5=$(md5 -q "$file")
-        else
-            actual_md5=$(md5sum "$file" | awk '{ print $1 }')
-        fi
-
-        if [[ "$actual_md5" == "$expected_md5" ]]; then
-            return 0  # Checksum matches
-        else
-            return 1  # Checksum does not match
-        fi
-    }
-
-    # Download the OTA ZIP file
-    if [ ! -f "$OTA_ZIP" ]; then
-        echo "Downloading OTA ZIP..."
-        curl -L -C - -o "$OTA_ZIP" "$OTA_URL"
-        if [ $? -ne 0 ] || [ ! -s "$OTA_ZIP" ]; then
-            echo "Failed to download OTA ZIP. Please check your connection or the URL."
-            exit 1
+            # Escape any special characters (e.g., spaces) in the file path
+            IPSW_FILE_PATH=$(printf '%q' "$IPSW_FILE_PATH")
         fi
     else
-        echo "OTA ZIP already exists at $OTA_ZIP"
+        echo "No stored IPSW path found. You need to provide the IPSW file path."
+        prompt_for_ipsw_path
     fi
-
-    # Expected MD5 checksum for the IPSW file
-    expected_ipsw_md5="c942c28915fcc2ee3c55cd9e17e1dc7d"
-
-    # Download the IPSW file
-    if [ -f "$IPSW_FILE" ]; then
-        echo "IPSW file already exists at $IPSW_FILE. Verifying checksum..."
-        if ! verify_md5 "$IPSW_FILE" "$expected_ipsw_md5"; then
-            echo "Checksum does not match. Deleting and redownloading IPSW file..."
-            rm -f "$IPSW_FILE"
-        else
-            echo "Checksum matches. Using existing IPSW file."
-        fi
-    fi
-
-    if [ ! -f "$IPSW_FILE" ]; then
-        echo "Downloading IPSW file..."
-        curl -L -C - -o "$IPSW_FILE" "$IPSW_URL"
-        if [ $? -ne 0 ] || [ ! -s "$IPSW_FILE" ] || [ "$(get_file_size "$IPSW_FILE")" -lt 100000 ]; then
-            echo "Failed to download IPSW file. Please check your connection or the URL."
-            exit 1
-        fi
-
-        # Verify the MD5 checksum after downloading
-        if ! verify_md5 "$IPSW_FILE" "$expected_ipsw_md5"; then
-            echo "Checksum verification failed after download. Exiting."
-            exit 1
-        else
-            echo "Checksum verification successful."
-        fi
-    fi
-
-    # Download the keys ZIP file
-    if [ ! -f "$KEYS_ZIP" ]; then
-        echo "Downloading keys ZIP..."
-        curl -L -C - -o "$KEYS_ZIP" "$KEYS_URL"
-        if [ $? -ne 0 ] || [ ! -s "$KEYS_ZIP" ]; then
-            echo "Failed to download keys ZIP. Please check your connection or the URL."
-            exit 1
-        fi
-    else
-        echo "Keys ZIP already exists at $KEYS_ZIP"
-    fi
-}
-
-function cleanup() {
-    echo "Performing cleanup"
-    rm -rf "${tmpdir}" 2>/dev/null || sudo rm -rf "${tmpdir}"
-}
-
-function get_ticket() {
-    target=$1
-    buildmanifest=$2
-    output=$3
-    echo "Getting OTA ticket for target '${target}'"
-    tsschecker -d "${target}" -m "${buildmanifest}" -s"${output}"
-}
-
-function patch_asr() {
-    asrpath=$1
-    echo "Patching ASR"
-    strloc=$(binrider --string "Image failed signature verification." "${asrpath}" | grep "Found 'Image failed signature verification.' at" | rev | cut -d ' ' -f1 | rev)
-    strref=$(binrider --xref "${strloc}" "${asrpath}" | grep "Found xrefs at" | rev | cut -d ' ' -f1 | rev)
-    bof=$(binrider --bof "${strref}" "${asrpath}" | grep "Found beginning of function at" | rev | cut -d ' ' -f1 | rev)
-    cref=$(binrider --cref "${bof}" "${asrpath}" | grep "Found call refs at" | rev | cut -d ' ' -f1 | rev)
-    paddr=""
-    for i in $(seq 0 4 0x30); do
-        tgtdec=$((${cref} - ${i}))
-        tgt=$(printf '0x%x\n' ${tgtdec})
-        failstr="No refs found to ${tgt}"
-        bref=$(binrider --bref "${tgt}" "${asrpath}")
-        if echo "${bref}" | grep "${failstr}"; then
-            continue
-        fi
-        paddr=$(echo "${bref}" | grep "Found branch refs at" | head -n1 | rev | cut -d ' ' -f1 | rev)
-        break
-    done
-    if [ -z "${paddr}" ]; then
-        echo "Patchfinder failed to find patch addr"
-        exit 3
-    fi
-    fof=$(binrider --fof "${paddr}" "${asrpath}" | grep "Found fileoffset at" | rev | cut -d ' ' -f1 | rev)
-
-    echo "Patching file"
-    echo -en "\x1F\x20\x03\xD5" | sudo dd of="${asrpath}" bs=1 seek=$((${fof})) conv=notrunc count=4
-
-    echo "Resigning file"
-    sudo ldid -s "${asrpath}"
-}
-
-function make_rootfs() {
-    otadir="$1"
-    outramdisk="$2"
-    wrkdir="$3"
-
-    rootfsdir="${wrkdir}/rootfs"
-    mkdir -p "${rootfsdir}"
-
-    for i in $(awk -F':' '{print $1}' "${otadir}/AssetData/payloadv2/payload_chunks.txt"); do 
-        nn=$(printf "%03d" "$i")
-        echo "Extracting chunk ${nn}..."
-        sudo yaa extract -v -d "${rootfsdir}" -i "${otadir}/AssetData/payloadv2/payload.${nn}"
-    done
-  
-    # Copy UNMODIFIED ramdisk
-    sudo cp -a "${otadir}/AssetData/payload/replace/usr/standalone/update/ramdisk/arm64SURamDisk.dmg" "${rootfsdir}/usr/standalone/update/ramdisk/"
-    sudo chown root:wheel "${rootfsdir}/usr/standalone/update/ramdisk/arm64SURamDisk.dmg"
-    sudo chmod 644 "${rootfsdir}/usr/standalone/update/ramdisk/arm64SURamDisk.dmg"
-    sudo /usr/bin/xattr -c "${rootfsdir}/usr/standalone/update/ramdisk/arm64SURamDisk.dmg"
-
-    BUILDTRAIN="$(/usr/bin/plutil -extract "BuildIdentities".0."Info"."BuildTrain" raw -o - "${otadir}/AssetData/boot/BuildManifest.plist")"
-    BUILDNUMBER="$(/usr/bin/plutil -extract "BuildIdentities".0."Info"."BuildNumber" raw -o - "${otadir}/AssetData/boot/BuildManifest.plist")"
-    APTARGETTYPE="$(/usr/bin/plutil -extract "BuildIdentities".0."Ap,TargetType" raw -o - "${otadir}/AssetData/boot/BuildManifest.plist")"
-    VOLNAME="${BUILDTRAIN}${BUILDNUMBER}.${APTARGETTYPE}OS"
-    IMGSIZE_MB=$(($(sudo du -A -s -m "${rootfsdir}" | awk '{ print $1 }')+100))
-
-    # Create DMG 100MB larger
-    echo "Creating a dmg with ${IMGSIZE_MB} MB free"
-    IMGFILEINFO="$(hdiutil create -megabytes "${IMGSIZE_MB}" -layout NONE -attach -volname RESTORE -fs 'exFAT' "${wrkdir}/os.udrw.dmg")"
-    IMGNODE="$(echo "$IMGFILEINFO" | head -n1 | awk '{print $1}')"
-    diskutil unmountDisk "${IMGNODE}"
-    diskutil partitionDisk -noEFI ${IMGNODE} 1 "GPT" "Free Space" "${VOLNAME}" 100
-    APFSOUTPUT="$(diskutil apfs createContainer "${IMGNODE}")"
-    APFSNODE="$(echo "$APFSOUTPUT" | grep 'Disk from APFS operation' | awk '{print $5}')"
-    APFSVOLOUTPUT="$(diskutil apfs addVolume "${APFSNODE}" "Case-sensitive APFS" "${VOLNAME}" -role S)"
-    APFSVOLNODE="$(echo "$APFSVOLOUTPUT" | grep 'Disk from APFS operation' | awk '{print $5}')"
-
-    sudo diskutil enableOwnership ${APFSVOLNODE}
-
-    if [[ $(diskutil info "${APFSVOLNODE}" | grep 'Mounted' | grep 'Yes') ]]; then
-        MOUNTPOINT="$(diskutil info "${APFSVOLNODE}" | grep 'Mount Point' | sed 's/[[:space:]]*Mount\ Point:[[:space:]]*//')"
-    else
-        echo "Disk image is not mounted or could not determine mountpoint."
-        exit 1
-    fi
-
-    echo "Copying to ${APFSVOLNODE} aka ${MOUNTPOINT}"
-    sudo ditto "${rootfsdir}" "${MOUNTPOINT}"
-
-    sudo rm -rf "${MOUNTPOINT}/.fseventsd"
-
-    # Fix up the extracted files
-    sudo yaa check-and-fix -d "${MOUNTPOINT}" -i "${otadir}/AssetData/payloadv2/fixup.manifest"
-
-    # Eject rootfs
-    hdiutil detach "${MOUNTPOINT}"
-
-    # Convert image to ULFO format
-    echo "Converting to ULFO format"
-    hdiutil convert -format ULFO -o "${outramdisk}" "${wrkdir}/os.udrw.dmg"
-    asr imagescan --source "${outramdisk}"
-    echo "Done creating rootfs"
-}
-
-function create_ipsw() {
-    otaPath=$1
-    donorPath=$2
-    outputPath=$3
-    keysPath=$4
-    tmpdir=$(mktemp -d /tmp/homepodtmpXXXXXXXXXX)
-    ipswdir=${tmpdir}/ipsw
-    otadir=${tmpdir}/ota
-    ra1nsn0wdir=${tmpdir}/ra1nsn0w
-    rootfswrkdir=${tmpdir}/rootfswrkdir
-    mkdir -p ${ipswdir} ${otadir} ${ra1nsn0wdir} ${rootfswrkdir}
-
-    if [ -f "$outputPath" ]; then
-        echo "Existing IPSW file found at $outputPath, skipping IPSW creation."
-        return 0
-    fi
-
-    echo "Extracting OTA to '${otadir}'"
-    unzip ${otaPath} -d ${otadir}
-
-    make_rootfs ${otadir} "${ipswdir}/myrootfs.dmg" ${rootfswrkdir}
-
-    mv "${otadir}/AssetData/boot/"* "${ipswdir}/"
-    rm -rf "${otadir}/AssetData/boot/"
-
-    targetProduct=$(plutil -extract "BuildIdentities".0."Ap,ProductType" raw "${ipswdir}/BuildManifest.plist")
-    targetHardware=$(plutil -extract "BuildIdentities".0."Ap,Target" raw "${ipswdir}/BuildManifest.plist")
-    echo "Found target: '${targetProduct}' '${targetHardware}'"
-    get_ticket ${targetProduct} "${ipswdir}/BuildManifest.plist" "${tmpdir}/ticket.shsh2"
-
-    # Pass the keys ZIP file directly to ra1nsn0w
-    ra1nsn0w -t "${tmpdir}/ticket.shsh2" \
-        --ipatch-no-force-dfu \
-        --kpatch-always-get-task-allow \
-        --kpatch-codesignature \
-        -b "rd=md0 -v serial=3 nand-enable-reformat=1 -restore" \
-        --dry-run "${targetProduct}":"${targetHardware}":1 \
-        --dry-out "${ra1nsn0wdir}" \
-        --ota "${otaPath}" \
-        --keys-zip "$keysPath"
-
-    if [ $? -ne 0 ]; then
-        echo "ra1nsn0w failed, aborting."
-        cleanup
-        exit 1
-    fi
-
-    iBSSPathPart=$(plutil -extract "BuildIdentities".0.Manifest.iBSS.Info.Path raw "${ipswdir}/BuildManifest.plist")
-    iBECPathPart=$(plutil -extract "BuildIdentities".0.Manifest.iBEC.Info.Path raw "${ipswdir}/BuildManifest.plist")
-
-    echo "Deploying patched bootloaders"
-    rm "${ipswdir}/${iBSSPathPart}"
-    img4tool -e -p "${ipswdir}/${iBSSPathPart}" "${ra1nsn0wdir}/component1.bin"
-
-    rm "${ipswdir}/${iBECPathPart}"
-    img4tool -e -p "${ipswdir}/${iBECPathPart}" "${ra1nsn0wdir}/component2.bin"
-
-    echo "Deploying patched kernel"
-    ra1nsn0wLastComponent=$(ls -l ${ra1nsn0wdir} | tail -n1 | rev | cut -d ' ' -f1 | rev)
-    img4tool -e -p "${ipswdir}/restorekernel.im4p" "${ra1nsn0wdir}/${ra1nsn0wLastComponent}"
-
-    plutil -replace "BuildIdentities".0.Manifest.RestoreKernelCache.Info.Path -string restorekernel.im4p -o "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-    mv -f "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-
-    echo "Extracting donor BuildManifest.plist"
-    unzip "${donorPath}" -d "${tmpdir}" BuildManifest.plist
-
-    cntIdentites=$(plutil -extract "BuildIdentities" xml1 -o - "${tmpdir}/BuildManifest.plist" | xmllint --xpath "count(//dict)" -)
-    if [[ -z "$cntIdentites" ]]; then
-        echo "Failed to extract build identities, please check the BuildManifest.plist."
-        cleanup
-        exit 1
-    fi
-    foundident="-1"
-    echo "Donor has ${cntIdentites} build identities"
-
-    for ((i=0; i<$cntIdentites; i++)); do
-        echo "Checking identity ${i}..."
-        variant=$(plutil -extract "BuildIdentities.${i}.Info.Variant" raw "${tmpdir}/BuildManifest.plist")
-        if [[ "$variant" == *"Customer Erase Install (IPSW)"* ]]; then
-            foundident=$i
-            break
-        fi
-    done
-
-    if [[ $foundident  -eq "-1" ]]; then
-        echo "Failed to find target build identity"
-        cleanup
-        exit 2
-    fi
-    echo "Found target build identity (${foundident}), getting ramdisk"
-    restoreramdisk=$(plutil -extract "BuildIdentities.${foundident}.Manifest.RestoreRamDisk.Info.Path" raw ${tmpdir}/BuildManifest.plist)
-
-    echo "Extracting ramdisk '${restoreramdisk}'"
-    unzip ${donorPath} -d ${tmpdir} ${restoreramdisk}
-    img4tool -e -o "${tmpdir}/rdsk.dmg" "${tmpdir}/${restoreramdisk}"
-
-    echo "Mounting ramdisk"
-    mntpoint=$(hdiutil attach "${tmpdir}/rdsk.dmg" | tail -n1 | cut -d $'\t' -f3)
-    echo "Ramdisk mounted at '${mntpoint}'"
-
-    if [[ ! -f "${mntpoint}/usr/local/bin/restored_external" ]]; then
-        echo "Ramdisk does not contain a restored_external binary. Either the IPSW is corrupt/incorrect, or this script has a bug."
-        cleanup
-        exit 3
-    fi
-
-    echo "Patching ASR"
-    patch_asr "${mntpoint}/usr/sbin/asr"
-
-    echo "Unmounting ramdisk"
-    hdiutil detach "${mntpoint}"
-
-    echo "Patching RestoreRamDisk path in BuildManifest"
-    plutil -replace "BuildIdentities".0.Manifest.RestoreRamDisk.Info.Path -string myramdisk.dmg -o "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-    mv -f "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-
-    echo "Packing ramdisk to IM4P file"
-    img4tool -c "${ipswdir}/myramdisk.dmg" -t rdsk "${tmpdir}/rdsk.dmg"
-
-    echo "Patching OS path in BuildManifest"
-    plutil -replace "BuildIdentities".0.Manifest.OS.Info.Path -string myrootfs.dmg -o "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-    mv -f "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-
-    echo "Setting Restore behavior in BuildManifest"
-    plutil -replace "BuildIdentities".0.Info.RestoreBehavior -string "Erase" -o "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-    mv -f "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-
-    echo "Setting Variant in BuildManifest to match Erase Install"
-    plutil -replace "BuildIdentities".0.Info.Variant -string "Customer Erase Install (IPSW)" -o "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-    mv -f "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-
-    echo "Setting RecoveryVariant in BuildManifest to match Recovery Customer Install"
-    plutil -replace "BuildIdentities".0.Info.RecoveryVariant -string "Recovery Customer Install" -o "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-    mv -f "${ipswdir}/BuildManifest_new.plist" "${ipswdir}/BuildManifest.plist"
-
-    echo "Compressing IPSW"
-    (
-        cd "${ipswdir}"
-        zip -r "${tmpdir}/mycfw.ipsw" .
-    )
-    mv "${tmpdir}/mycfw.ipsw" "${outputPath}"
-
-    cleanup
-    echo "Done!!"
 }
 
 function restore_homepod() {
-    echo "Starting HomePod restore process..."
-    gaster pwn
-    gaster reset
-    idevicerestore -d -e "$OUTPUT_IPSW"
+    echo -e "${YELLOW}Starting HomePod restore process... Press CTRL+C at any time to return to the main menu.${RESET}"
+
+    # Ensure IPSW file path is set and valid
+    get_ipsw_path
+
+    if [[ ! -f "$IPSW_FILE_PATH" ]]; then
+        echo "Error: IPSW file not found at $IPSW_FILE_PATH. Please update the IPSW file location."
+        update_ipsw_path
+        return
+    fi
+
+    # Log file setup, and continue with gaster commands, idevicerestore, etc.
+    SCRIPT_DIR=$(dirname "$(realpath "$0")")
+    RESTORE_LOG="$SCRIPT_DIR/restore_log_$(date +%Y%m%d_%H%M%S).txt"
+
+    echo -e "${YELLOW}Logging full output to $RESTORE_LOG${RESET}"
+
+    echo "Preparing device for restoration..."
+    gaster pwn >> "$RESTORE_LOG" 2>&1
+    gaster reset >> "$RESTORE_LOG" 2>&1
+
+    echo -e "${YELLOW}Restoration process started. Follow these checkpoints.${RESET}"
+
+    # Run idevicerestore and capture its output
+    idevicerestore -d -e "$IPSW_FILE_PATH" >> "$RESTORE_LOG" 2>&1 &
+    RESTORE_PID=$!
+
+    # Initialize checkpoint flags
+    CHECKPOINT_1=false
+    CHECKPOINT_2=false
+    CHECKPOINT_3=false
+    CHECKPOINT_4=false
+    CHECKPOINT_5=false
+    CHECKPOINT_6=false
+    CHECKPOINT_7=false
+
+    while kill -0 $RESTORE_PID 2> /dev/null; do
+        sleep 5  # Poll every 5 seconds for status updates
+
+        # Read the last 100 lines of the log to detect certain key progress points
+        LAST_LOG_LINES=$(tail -n 100 "$RESTORE_LOG")
+
+        # Check for checkpoints in the log
+        if echo "$LAST_LOG_LINES" | grep -q "Now you can boot untrusted images." && [ "$CHECKPOINT_1" = false ]; then
+            echo -e "${GREEN}Checkpoint 1: Connected to HomePod.${RESET}"
+            CHECKPOINT_1=true
+        fi
+        if echo "$LAST_LOG_LINES" | grep -q "Extracting filesystem from IPSW: myrootfs.dmg" && [ "$CHECKPOINT_2" = false ]; then
+            echo -e "${GREEN}Checkpoint 2: Opening IPSW.${RESET}"
+            CHECKPOINT_2=true
+        fi
+        if echo "$LAST_LOG_LINES" | grep -q "NOTE: No path for component iBEC in TSS, will fetch from build_identity" && [ "$CHECKPOINT_3" = false ]; then
+            echo -e "${GREEN}Checkpoint 3: HomePod entered Recovery Mode.${RESET}"
+            CHECKPOINT_3=true
+        fi
+        if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56" && [ "$CHECKPOINT_4" = false ]; then
+            echo -e "${GREEN}Checkpoint 4: NAND Check.${RESET}"
+            CHECKPOINT_4=true
+        fi
+        if echo "$LAST_LOG_LINES" | grep -q "Validating the filesystem" && [ "$CHECKPOINT_5" = false ]; then
+            echo -e "${GREEN}Checkpoint 5: Validating Filesystem.${RESET}"
+            CHECKPOINT_5=true
+        fi
+        if echo "$LAST_LOG_LINES" | grep -q "Restoring image (13)" && [ "$CHECKPOINT_6" = false ]; then
+            echo -e "${GREEN}Checkpoint 6: Restoring HomePod, this takes 10-15 minutes. Check log for detailed progress.${RESET}"
+            CHECKPOINT_6=true
+        fi
+        if echo "$LAST_LOG_LINES" | grep -q "(check_mounted) result=0" && [ "$CHECKPOINT_7" = false ]; then
+            echo -e "${GREEN}Checkpoint 7: Restore complete. Wait 30 seconds to unplug power from HomePod, turn right-side up and plug back in. Set up as normal.${RESET}"
+            CHECKPOINT_7=true
+            sleep 45  # Wait for 45 seconds before proceeding
+            echo -e "${YELLOW}Returning to the main menu...${RESET}"
+            sleep 3
+            show_menu  # Return to the main menu after the wait
+        fi
+
+        # Detect and handle non-critical failure messages without stopping
+        if echo "$LAST_LOG_LINES" | grep -q "ampctl failure" || echo "$LAST_LOG_LINES" | grep -q "RamrodErrorDomain"; then
+            echo -e "${YELLOW}Non-critical error detected (ampctl or RamrodErrorDomain). THIS IS NORMAL. Continuing...${RESET}"
+        fi
+    done
+
+    wait $RESTORE_PID
+    RESTORE_EXIT_CODE=$?
+
+    # Notify user about the result, and don't exit if it's a non-critical error
+    if [ "$RESTORE_EXIT_CODE" -ne 0 ] && [ "$CHECKPOINT_7" = false ]; then
+        echo -e "${YELLOW}Restore process encountered issues. Please check the full log: $RESTORE_LOG${RESET}"
+    else
+        echo -e "${GREEN}Restore process completed successfully. Full log saved: $RESTORE_LOG${RESET}"
+    fi
+
+    # Return to the main menu
+    show_menu
+}
+
+# Update the IPSW path only
+function update_ipsw_path() {
+    echo "Updating the IPSW file location..."
+    prompt_for_ipsw_path
+    echo "IPSW path updated successfully."
+    echo "Returning to the main menu..."
+    show_menu  # Return to the main menu
+}
+
+function create_custom_ipsw() {
+    echo "This option is reserved for creating a custom IPSW."
+    echo "Returning to the main menu..."
+    show_menu  # Return to the main menu
+}
+
+# UI Function for User Input
+function show_menu() {
+    clear
+    echo "HomePod Restore Tool"
+    echo "Please choose an option:"
+    echo "1) Check and install all needed dependencies"
+    echo "2) Flash a pre-made IPSW to a HomePod"
+    echo "3) Create a custom IPSW (COMING SOON)"
+    echo "4) Update IPSW File Location"
+    echo "5) Exit"
+    read -p "Enter your choice [1-5]: " choice
+
+    case $choice in
+        1)
+            echo "Option 1 selected: Checking and installing dependencies..."
+            check_homebrew
+            install_dependencies
+            ;;
+        2)
+            echo "Option 2 selected: Flashing a pre-made IPSW..."
+            restore_homepod
+            ;;
+        3)
+            echo "Option 3 selected: Creating a custom IPSW..."
+            create_custom_ipsw
+            ;;
+        4)
+            echo "Option 4 selected: Updating IPSW File Location..."
+            update_ipsw_path
+            ;;
+        5)
+            echo "Exiting the script."
+            exit 0
+            ;;
+        *)
+            echo "Invalid option. Please try again."
+            show_menu
+            ;;
+    esac
 }
 
 # Main script
-
-
-echo "Checking for Homebrew..."
-check_homebrew
-
-echo "Installing dependencies..."
-install_dependencies
-
-echo "Checking for existing output IPSW..."
-if [ -f "$OUTPUT_IPSW" ]; then
-    echo "Existing output IPSW found at $OUTPUT_IPSW. Skipping download and assembly."
-else
-
-    echo "Checking and downloading necessary files..."
-    check_and_download_files
-
-    echo "Creating IPSW file..."
-    create_ipsw "$OTA_ZIP" "$IPSW_FILE" "$OUTPUT_IPSW" "$KEYS_ZIP"
-fi
-echo "Restoring HomePod..."
-restore_homepod
-
-echo "Process complete!"
+show_menu

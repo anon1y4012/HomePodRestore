@@ -1,11 +1,16 @@
 ## Download and Run
 
-1. Go to the [Releases](https://github.com/anon1y4012/HomePodRestore/releases) section.
-2. Download the latest version for your platform.
-3. Make executable by running
+1. Download the restorer.sh file
+2. Make executable by running
 
 ```bash
-chmod +x /path/to/tool
+chmod +x /path/to/restorer.sh
 ```
-4. Double click the executable and agree to run unverified app
-5. When assembling an IPSW file, you will be prompted for your password inside the Terminal window, not the app. This will be fixed soon.
+3. Run script by typing
+
+```bash
+bash /path/to/restorer.sh
+```
+It is advised to run the dependency check at least once to verify the latest version of all tools.
+
+Check logs for errors during output.
