@@ -254,6 +254,36 @@ function restore_homepod() {
     show_menu
 }
 
+function update_script() {
+    echo -e "${YELLOW}Checking for script updates...${RESET}"
+    
+    # Define the URL where the latest script is hosted (raw content)
+    SCRIPT_URL="https://raw.githubusercontent.com/anon1y4012/HomePodRestore/main/restorer.sh"
+
+    # Temporary location to download the new script
+    TEMP_SCRIPT="/tmp/latest_homepod_restore_script.sh"
+
+    # Download the latest version of the script
+    curl -L -o "$TEMP_SCRIPT" "$SCRIPT_URL"
+
+    if [[ $? -ne 0 ]]; then
+        echo -e "${RED}Failed to download the latest script. Please check your connection or the URL.${RESET}"
+        sleep 3
+        show_menu
+        return
+    fi
+
+    # Overwrite the current script with the new one
+    chmod +x "$TEMP_SCRIPT"  # Ensure the downloaded script is executable
+
+    # Replace the current script with the new one
+    mv "$TEMP_SCRIPT" "$0"
+
+    # Restart the script
+    echo -e "${GREEN}Script updated successfully. Restarting...${RESET}"
+    exec "$0"  # Restart the script by executing it again
+}
+
 function create_custom_ipsw() {
     echo "This option is reserved for creating a custom IPSW."
     echo "Returning to the main menu..."
@@ -270,8 +300,9 @@ function show_menu() {
     echo "3) Create a custom IPSW (COMING SOON)"
     echo "4) Update IPSW File Location"
     echo "5) Download Pre-built IPSW"
-    echo "6) Exit"
-    read -p "Enter your choice [1-6]: " choice
+    echo "6) Update this script with the latest version"
+    echo "7) Exit"
+    read -p "Enter your choice [1-7]: " choice
 
     case $choice in
         1)
@@ -289,13 +320,17 @@ function show_menu() {
             ;;
         4)
             echo "Option 4 selected: Updating IPSW File Location..."
-            update_ipsw_path 
+            prompt_for_ipsw_path  # Fixed to correctly prompt the user for a path
             ;;
         5)
             echo "Option 5 selected: Downloading Pre-built IPSW..."
             download_ipsw
             ;;
         6)
+            echo "Option 6 selected: Updating this script with the latest version..."
+            update_script
+            ;;
+        7)
             echo "Exiting the script."
             exit 0
             ;;
@@ -305,6 +340,5 @@ function show_menu() {
             ;;
     esac
 }
-
 # Main script
 show_menu
