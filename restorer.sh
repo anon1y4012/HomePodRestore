@@ -340,5 +340,6 @@ function show_menu() {
             ;;
     esac
 }
+
 # Main script
 show_menu
