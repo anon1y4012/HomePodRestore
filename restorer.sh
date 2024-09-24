@@ -57,6 +57,23 @@ function check_homebrew() {
     show_menu  # Return to the main menu
 }
 
+
+function spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    
+    while kill -0 $pid 2>/dev/null; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"  # Backspace to clear the spinner characters
+    done
+    printf "\b\b\b\b\b\b"  # Clean up any leftover spinner characters
+}
+
+
 function install_dependencies() {
     echo -e "${YELLOW}Press CTRL+C at any time to return to the main menu.${RESET}"
     echo "Tapping d235j/ios-restore-tools..."
@@ -149,9 +166,34 @@ function get_ipsw_path() {
     fi
 }
 
+
+function check_device_in_dfu() {
+    echo -e "${YELLOW}Checking if a HomePod is connected in DFU mode...${RESET}"
+    
+    # Check for a device in DFU mode using ideviceinfo or irecovery
+    device_info=$(irecovery -q 2>&1)
+    
+    if echo "$device_info" | grep -q "ERROR: No device found"; then
+        echo -e "${RED}No device detected in DFU mode. Please connect your HomePod in DFU mode and try again.${RESET}"
+        return 1  # Return error code 1 if no device is found
+    else
+        echo -e "${GREEN}HomePod detected in DFU mode.${RESET}"
+        return 0  # Return success code 0 if the device is found
+    fi
+}
+
+
 # Function to restore the HomePod
 function restore_homepod() {
     echo -e "${YELLOW}Starting HomePod restore process... Press CTRL+C at any time to return to the main menu.${RESET}"
+
+    # Check if the device is connected in DFU mode
+    check_device_in_dfu
+    if [[ $? -ne 0 ]]; then
+        sleep 3
+        show_menu  # Return to the main menu if the device is not detected
+        return
+    fi
 
     # Ensure IPSW file path is set and valid
     get_ipsw_path
@@ -172,11 +214,14 @@ function restore_homepod() {
     gaster pwn >> "$RESTORE_LOG" 2>&1
     gaster reset >> "$RESTORE_LOG" 2>&1
 
-    echo -e "${YELLOW}Restore process started. Checkpoints will appear below.${RESET}"
+    echo -e "${YELLOW}Restore process started. Follow these checkpoints.${RESET}"
 
     # Run idevicerestore and capture its output
     idevicerestore -d -e "$CURRENT_IPSW_PATH" >> "$RESTORE_LOG" 2>&1 &
     RESTORE_PID=$!
+    
+    # Start the spinner while the restore process is running
+    spinner $RESTORE_PID &
 
     # Initialize checkpoint flags
     CHECKPOINT_1=false
@@ -242,6 +287,9 @@ function restore_homepod() {
 
     wait $RESTORE_PID
     RESTORE_EXIT_CODE=$?
+    
+    kill $! 2>/dev/null  # Terminate the spinner process
+    printf "\n"  # Ensure a newline after the spinner stops
 
     # Notify user about the result, and don't exit if it's a non-critical error
     if [ "$RESTORE_EXIT_CODE" -ne 0 ] && [ "$CHECKPOINT_7" = false ]; then
@@ -296,14 +344,14 @@ function show_menu() {
     clear
     echo "HomePod Restore Tool"
     echo "Please choose an option:"
-    echo "1) Check and install all needed dependencies"
-    echo "2) Flash a pre-made IPSW to a HomePod"
-    echo "3) Create a custom IPSW (COMING SOON)"
+    echo "1) Check/Install Dependencies"
+    echo "2) Restore HomePod"
+    echo "3) Create a Custom IPSW (COMING SOON)"
     echo "4) Update IPSW File Location"
     echo "5) Download Pre-built IPSW"
-    echo "6) Update this script with the latest version"
+    echo "6) Update This Script"
     echo "7) Exit"
-    read -p "Enter your choice [1-7]: " choice
+    read -p "Enter Selection [1-7]: " choice
 
     case $choice in
         1)
@@ -312,7 +360,7 @@ function show_menu() {
             install_dependencies
             ;;
         2)
-            echo "Option 2 selected: Flashing a pre-made IPSW..."
+            echo "Option 2 selected: Restoring HomePod..."
             restore_homepod
             ;;
         3)
