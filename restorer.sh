@@ -281,6 +281,7 @@ function update_script() {
 
     # Restart the script
     echo -e "${GREEN}Script updated successfully. Restarting...${RESET}"
+    sleep 5
     exec "$0"  # Restart the script by executing it again
 }
 
