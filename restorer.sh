@@ -3,6 +3,7 @@
 # Color variables
 YELLOW='\033[1;33m'
 GREEN='\033[1;32m'
+RED='\033[1;31m'
 RESET='\033[0m'  # Reset to default color
 
 # Variables
@@ -10,9 +11,11 @@ DOWNLOADS_DIR="$HOME/Downloads"
 IPSW_FILE_PATH=""
 
 # Pre-defined IPSW path stored within the script
-CURRENT_IPSW_PATH="/Users/john/Downloads/17.6.ipsw"
+CURRENT_IPSW_PATH=""
 
 BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "idevicerestore" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
+
+IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/17.6.ipsw"
 
 # Function to trap CTRL+C and return to the main menu
 trap ctrl_c INT
@@ -48,6 +51,7 @@ function check_homebrew() {
     else
         echo "Homebrew is already installed."
     fi
+    install_dependencies  # Ensure dependencies are installed even if Homebrew is already present
     echo "Returning to the main menu..."
     sleep 3
     show_menu  # Return to the main menu
@@ -66,9 +70,8 @@ function install_dependencies() {
             echo "$dep is already installed."
         fi
     done
-    echo "Returning to the main menu..."
-    show_menu  # Return to the main menu
 }
+
 
 # Function to prompt for an IPSW file path and store it within the script
 function prompt_for_ipsw_path() {
@@ -94,37 +97,68 @@ function update_script_with_ipsw_path() {
     # Use sed to replace the CURRENT_IPSW_PATH with the new path
     sed -i '' "s|^CURRENT_IPSW_PATH=.*|CURRENT_IPSW_PATH=\"$escaped_new_path\"|" "$0"
     
+    # Update the global variable for the current session
+    CURRENT_IPSW_PATH="$new_path"
+    
     echo -e "${GREEN}IPSW file path successfully updated to: $new_path${RESET}"
 }
 
+# Function to download the IPSW
+function download_ipsw() {
+    SCRIPT_DIR=$(dirname "$(realpath "$0")")
+    IPSW_DEST_PATH="$SCRIPT_DIR/17.6.ipsw"
+    
+    if [[ -f "$IPSW_DEST_PATH" ]]; then
+        echo -e "${YELLOW}IPSW file already exists at $IPSW_DEST_PATH. Skipping download...${RESET}"
+        update_script_with_ipsw_path "$IPSW_DEST_PATH"
+    else
+        echo -e "${YELLOW}Downloading the IPSW file...${RESET}"
+        curl -L -C - "$IPSW_DOWNLOAD_URL" -o "$IPSW_DEST_PATH" --progress-bar
+
+        if [[ $? -ne 0 ]]; then
+            echo -e "${YELLOW}Failed to download the IPSW file. Please check your connection.${RESET}"
+        else
+            echo -e "${GREEN}Download complete! IPSW saved to: $IPSW_DEST_PATH${RESET}"
+            update_script_with_ipsw_path "$IPSW_DEST_PATH"
+        fi
+    fi
+
+    echo "Returning to the main menu..."
+    sleep 3
+    show_menu
+}
+
+# Update the IPSW path only
+function update_ipsw_path() {
+    echo "Updating the IPSW file location..."
+    prompt_for_ipsw_path
+    echo "IPSW path updated successfully."
+    echo -e "${YELLOW}Returning to the main menu...${RESET}"
+    sleep 3
+    show_menu  # Return to the main menu after updating the path
+}
 
 # Function to retrieve the stored IPSW path or prompt for it if not found
 function get_ipsw_path() {
-    if [[ -f "$IPSW_PATH_FILE" ]]; then
-        IPSW_FILE_PATH=$(cat "$IPSW_PATH_FILE")
-        # Ensure the path exists and is valid
-        if [[ ! -f "$IPSW_FILE_PATH" ]]; then
-            echo "The stored IPSW path is invalid or the file does not exist."
-            prompt_for_ipsw_path
-        else
-            # Escape any special characters (e.g., spaces) in the file path
-            IPSW_FILE_PATH=$(printf '%q' "$IPSW_FILE_PATH")
-        fi
-    else
-        echo "No stored IPSW path found. You need to provide the IPSW file path."
+    # If no path is set in CURRENT_IPSW_PATH, prompt the user
+    if [[ -z "$CURRENT_IPSW_PATH" || ! -f "$CURRENT_IPSW_PATH" ]]; then
+        echo "No valid IPSW file path found. Please provide the IPSW file path."
         prompt_for_ipsw_path
+    else
+        echo -e "${GREEN}Using stored IPSW file path: $CURRENT_IPSW_PATH${RESET}"
     fi
 }
 
+# Function to restore the HomePod
 function restore_homepod() {
     echo -e "${YELLOW}Starting HomePod restore process... Press CTRL+C at any time to return to the main menu.${RESET}"
 
     # Ensure IPSW file path is set and valid
     get_ipsw_path
 
-    if [[ ! -f "$IPSW_FILE_PATH" ]]; then
-        echo "Error: IPSW file not found at $IPSW_FILE_PATH. Please update the IPSW file location."
-        update_ipsw_path
+    if [[ ! -f "$CURRENT_IPSW_PATH" ]]; then
+        echo "Error: IPSW file not found at $CURRENT_IPSW_PATH. Please update the IPSW file location."
+        update_script_with_ipsw_path
         return
     fi
 
@@ -134,14 +168,14 @@ function restore_homepod() {
 
     echo -e "${YELLOW}Logging full output to $RESTORE_LOG${RESET}"
 
-    echo "Preparing device for restoration..."
+    echo "Preparing device for restore..."
     gaster pwn >> "$RESTORE_LOG" 2>&1
     gaster reset >> "$RESTORE_LOG" 2>&1
 
-    echo -e "${YELLOW}Restoration process started. Follow these checkpoints.${RESET}"
+    echo -e "${YELLOW}Restore process started. Checkpoints will appear below.${RESET}"
 
     # Run idevicerestore and capture its output
-    idevicerestore -d -e "$IPSW_FILE_PATH" >> "$RESTORE_LOG" 2>&1 &
+    idevicerestore -d -e "$CURRENT_IPSW_PATH" >> "$RESTORE_LOG" 2>&1 &
     RESTORE_PID=$!
 
     # Initialize checkpoint flags
@@ -154,30 +188,30 @@ function restore_homepod() {
     CHECKPOINT_7=false
 
     while kill -0 $RESTORE_PID 2> /dev/null; do
-        sleep 5  # Poll every 5 seconds for status updates
+        sleep 3  # Poll every 3 seconds for status updates
 
         # Read the last 100 lines of the log to detect certain key progress points
         LAST_LOG_LINES=$(tail -n 100 "$RESTORE_LOG")
 
         # Check for checkpoints in the log
         if echo "$LAST_LOG_LINES" | grep -q "Now you can boot untrusted images." && [ "$CHECKPOINT_1" = false ]; then
-            echo -e "${GREEN}Checkpoint 1: Connected to HomePod.${RESET}"
+            echo -e "${GREEN}Checkpoint 1: Connected to HomePod${RESET}"
             CHECKPOINT_1=true
         fi
         if echo "$LAST_LOG_LINES" | grep -q "Extracting filesystem from IPSW: myrootfs.dmg" && [ "$CHECKPOINT_2" = false ]; then
-            echo -e "${GREEN}Checkpoint 2: Opening IPSW.${RESET}"
+            echo -e "${GREEN}Checkpoint 2: Opening IPSW${RESET}"
             CHECKPOINT_2=true
         fi
         if echo "$LAST_LOG_LINES" | grep -q "NOTE: No path for component iBEC in TSS, will fetch from build_identity" && [ "$CHECKPOINT_3" = false ]; then
-            echo -e "${GREEN}Checkpoint 3: HomePod entered Recovery Mode.${RESET}"
+            echo -e "${GREEN}Checkpoint 3: HomePod entered Recovery Mode${RESET}"
             CHECKPOINT_3=true
         fi
-        if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56" && [ "$CHECKPOINT_4" = false ]; then
-            echo -e "${GREEN}Checkpoint 4: NAND Check.${RESET}"
+        if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56"         && [ "$CHECKPOINT_4" = false ]; then
+            echo -e "${GREEN}Checkpoint 4: NAND Check${RESET}"
             CHECKPOINT_4=true
         fi
         if echo "$LAST_LOG_LINES" | grep -q "Validating the filesystem" && [ "$CHECKPOINT_5" = false ]; then
-            echo -e "${GREEN}Checkpoint 5: Validating Filesystem.${RESET}"
+            echo -e "${GREEN}Checkpoint 5: Validating Filesystem${RESET}"
             CHECKPOINT_5=true
         fi
         if echo "$LAST_LOG_LINES" | grep -q "Restoring image (13)" && [ "$CHECKPOINT_6" = false ]; then
@@ -185,7 +219,7 @@ function restore_homepod() {
             CHECKPOINT_6=true
         fi
         if echo "$LAST_LOG_LINES" | grep -q "(check_mounted) result=0" && [ "$CHECKPOINT_7" = false ]; then
-            echo -e "${GREEN}Checkpoint 7: Restore complete. Wait 30 seconds to unplug power from HomePod, turn right-side up and plug back in. Set up as normal.${RESET}"
+            echo -e "${GREEN}Checkpoint 7: Restore complete. Wait until this message disappears to unplug power from HomePod, turn right-side up and plug back in. Set up as normal.${RESET}"
             CHECKPOINT_7=true
             sleep 45  # Wait for 45 seconds before proceeding
             echo -e "${YELLOW}Returning to the main menu...${RESET}"
@@ -196,6 +230,13 @@ function restore_homepod() {
         # Detect and handle non-critical failure messages without stopping
         if echo "$LAST_LOG_LINES" | grep -q "ampctl failure" || echo "$LAST_LOG_LINES" | grep -q "RamrodErrorDomain"; then
             echo -e "${YELLOW}Non-critical error detected (ampctl or RamrodErrorDomain). THIS IS NORMAL. Continuing...${RESET}"
+        fi
+
+        # Detect if the IPSW is no longer signed by Apple
+        if echo "$LAST_LOG_LINES" | grep -q "This device isn't eligible for the requested build"; then
+           echo -e "${RED}This IPSW is no longer signed by Apple, you will need a newer IPSW. Returning to main menu...${RESET}"
+           sleep 7  
+           show_menu  # Return to the main menu
         fi
     done
 
@@ -213,15 +254,6 @@ function restore_homepod() {
     show_menu
 }
 
-# Update the IPSW path only
-function update_ipsw_path() {
-    echo "Updating the IPSW file location..."
-    prompt_for_ipsw_path
-    echo "IPSW path updated successfully."
-    echo "Returning to the main menu..."
-    show_menu  # Return to the main menu
-}
-
 function create_custom_ipsw() {
     echo "This option is reserved for creating a custom IPSW."
     echo "Returning to the main menu..."
@@ -237,8 +269,9 @@ function show_menu() {
     echo "2) Flash a pre-made IPSW to a HomePod"
     echo "3) Create a custom IPSW (COMING SOON)"
     echo "4) Update IPSW File Location"
-    echo "5) Exit"
-    read -p "Enter your choice [1-5]: " choice
+    echo "5) Download Pre-built IPSW"
+    echo "6) Exit"
+    read -p "Enter your choice [1-6]: " choice
 
     case $choice in
         1)
@@ -256,9 +289,13 @@ function show_menu() {
             ;;
         4)
             echo "Option 4 selected: Updating IPSW File Location..."
-            update_ipsw_path
+            update_ipsw_path 
             ;;
         5)
+            echo "Option 5 selected: Downloading Pre-built IPSW..."
+            download_ipsw
+            ;;
+        6)
             echo "Exiting the script."
             exit 0
             ;;
