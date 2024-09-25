@@ -52,7 +52,7 @@ function check_homebrew() {
 function spinner() {
     local pid=$1
     local delay=0.1
-    local spinstr='|/-\'
+    local spinstr='|/-\\'
     while kill -0 $pid 2>/dev/null; do
         local temp=${spinstr#?}
         printf " [%c]  " "$spinstr"
@@ -92,7 +92,7 @@ function prompt_for_ipsw_path() {
 function update_script_with_ipsw_path() {
     local new_path="$1"
     escaped_new_path=$(echo "$new_path" | sed 's/\//\\\//g')
-    sed -i '' "s|^CURRENT_IPSW_PATH=.*|CURRENT_IPSW_PATH=\"$escaped_new_path\"|" "$0"
+    sed -i  "s|^CURRENT_IPSW_PATH=.*|CURRENT_IPSW_PATH=\"$escaped_new_path\"|" "$0"
     CURRENT_IPSW_PATH="$new_path"
     echo -e "${GREEN}IPSW file path successfully updated to: $new_path${RESET}"
 }
@@ -137,14 +137,18 @@ function get_ipsw_path() {
 }
 
 function check_device_in_dfu() {
-    echo -e "${YELLOW}Checking if a HomePod is connected in DFU mode...${RESET}"
+    echo -e "${YELLOW}Checking if a HomePod is connected in DFU mode... This may take up to 10 seconds.${RESET}"
+    
+    # Run irecovery with a timeout and capture the output
     device_info=$(irecovery -q 2>&1)
-    if echo "$device_info" | grep -q "ERROR: No device found"; then
+
+    # Check for specific error message
+    if echo "$device_info" | grep -q "ERROR: Unable to connect to device"; then
         echo -e "${RED}No device detected in DFU mode. Please connect your HomePod in DFU mode and try again.${RESET}"
-        return 1
+        return 1  # Return error code 1 if no device is found
     else
         echo -e "${GREEN}HomePod detected in DFU mode.${RESET}"
-        return 0
+        return 0  # Return success code 0 if the device is found
     fi
 }
 
@@ -197,7 +201,7 @@ function restore_homepod() {
             echo -e "${GREEN}Checkpoint 5: Validating Filesystem${RESET}"
             CHECKPOINT_5=true
         fi
-        if echo "$LAST_LOG_LINES"         | grep -q "Restoring image (13)" && [ "$CHECKPOINT_6" = false ]; then
+        if echo "$LAST_LOG_LINES" | grep -q "Restoring image (13)" && [ "$CHECKPOINT_6" = false ]; then
             echo -e "${GREEN}Checkpoint 6: Restoring HomePod, this takes 10-15 minutes. Check log for detailed progress.${RESET}"
             CHECKPOINT_6=true
         fi
@@ -217,15 +221,15 @@ function restore_homepod() {
 
         # Detect if the IPSW is no longer signed by Apple
         if echo "$LAST_LOG_LINES" | grep -q "This device isn't eligible for the requested build"; then
-           echo -e "${RED}This IPSW is no longer signed by Apple, you will need a newer IPSW. Returning to main menu...${RESET}"
-           sleep 7  
-           show_menu
+            echo -e "${RED}This IPSW is no longer signed by Apple, you will need a newer IPSW. Returning to main menu...${RESET}"
+            sleep 7
+            show_menu
         fi
     done
 
     wait $RESTORE_PID
     RESTORE_EXIT_CODE=$?
-    
+
     kill $! 2>/dev/null
     printf "\n"
 
@@ -240,7 +244,7 @@ function restore_homepod() {
 
 function update_script() {
     echo -e "${YELLOW}Checking for script updates...${RESET}"
-    
+
     SCRIPT_URL="https://raw.githubusercontent.com/anon1y4012/HomePodRestore/main/restorer.sh"
     TEMP_SCRIPT="/tmp/latest_homepod_restore_script.sh"
     curl -L -o "$TEMP_SCRIPT" "$SCRIPT_URL"
