@@ -11,8 +11,36 @@ DOWNLOADS_DIR="$HOME/Downloads"
 IPSW_FILE_PATH=""
 CURRENT_IPSW_PATH=""
 
-BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "idevicerestore" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
-IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/17.6.ipsw"
+
+IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/18.0.ipsw"
+
+# Variables
+BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w" "qrencode")
+SPECIFIC_IDEVICERESTORE_REVISION="d2e1c4f"  # The specific revision you want to install
+
+# Function to install specific revision of idevicerestore
+function install_specific_idevicerrestore_revision() {
+    echo -e "${YELLOW}Installing specific idevicerestore revision (${SPECIFIC_IDEVICERESTORE_REVISION})...${RESET}"
+    
+    # Get the formula file path for idevicerestore
+    FORMULA_PATH=$(brew --repo d235j/homebrew-ios-restore-tools)/Formula/idevicerestore.rb
+
+    # Check if the formula exists
+    if [[ -f "$FORMULA_PATH" ]]; then
+        echo "Found idevicerestore.rb at $FORMULA_PATH"
+        
+        # Replace the head reference with the specific commit
+        sed -i '' 's|head "https://github.com/libimobiledevice/idevicerestore.git"|head "https://github.com/libimobiledevice/idevicerestore.git", revision: "d2e1c4f"|' "$FORMULA_PATH"
+        
+        # Uninstall current version of idevicerestore
+        brew uninstall idevicerestore --ignore-dependencies
+        
+        # Install the specific idevicerestore revision
+        brew install --HEAD idevicerestore
+    else
+        echo -e "${RED}Failed to locate idevicerestore formula file. Ensure the Homebrew tap is installed.${RESET}"
+    fi
+}
 
 # Function to trap CTRL+C and return to the main menu
 trap ctrl_c INT
@@ -63,14 +91,21 @@ function spinner() {
     printf "\b\b\b\b\b\b"
 }
 
+
+# Function to install dependencies
 function install_dependencies() {
     echo -e "${YELLOW}Press CTRL+C at any time to return to the main menu.${RESET}"
     echo "Tapping d235j/ios-restore-tools..."
     brew tap d235j/ios-restore-tools
+
+    # Install the specific idevicerestore revision
+    install_specific_idevicerrestore_revision
+
+    # Install the rest of the dependencies including qrencode
     for dep in "${BREW_DEPENDENCIES[@]}"; do
         if ! brew list $dep &> /dev/null; then
             echo "Installing $dep..."
-            brew install --HEAD "$dep"
+            brew install "$dep"
         else
             echo "$dep is already installed."
         fi
@@ -160,35 +195,62 @@ function check_device_in_dfu() {
     fi
 }
 
+# Function to restore the HomePod
 function restore_homepod() {
     echo -e "${YELLOW}Starting HomePod restore process... Press CTRL+C at any time to return to the main menu.${RESET}"
+
+    # Check if the device is connected in DFU mode
     check_device_in_dfu
     if [[ $? -ne 0 ]]; then
         sleep 3
-        show_menu
+        show_menu  # Return to the main menu if the device is not detected
         return
     fi
+
+    # Ensure IPSW file path is set and valid
     get_ipsw_path
+
     if [[ ! -f "$CURRENT_IPSW_PATH" ]]; then
         echo "Error: IPSW file not found at $CURRENT_IPSW_PATH. Please update the IPSW file location."
         update_script_with_ipsw_path
         return
     fi
+
+    # Log file setup, and continue with gaster commands, idevicerestore, etc.
     SCRIPT_DIR=$(dirname "$(realpath "$0")")
     RESTORE_LOG="$SCRIPT_DIR/restore_log_$(date +%Y%m%d_%H%M%S).txt"
+
     echo -e "${YELLOW}Logging full output to $RESTORE_LOG${RESET}"
+
+    echo "Preparing device for restore..."
     gaster pwn >> "$RESTORE_LOG" 2>&1
     gaster reset >> "$RESTORE_LOG" 2>&1
+
     echo -e "${YELLOW}Restore process started. Follow these checkpoints.${RESET}"
+
+    # Run idevicerestore and capture its output
     idevicerestore -d -e "$CURRENT_IPSW_PATH" >> "$RESTORE_LOG" 2>&1 &
     RESTORE_PID=$!
+    
+    # Start the spinner while the restore process is running
     spinner $RESTORE_PID &
-    CHECKPOINT_1=false CHECKPOINT_2=false CHECKPOINT_3=false CHECKPOINT_4=false
-    CHECKPOINT_5=false CHECKPOINT_6=false CHECKPOINT_7=false
 
-    while kill -0 $RESTORE_PID 2>/dev/null; do
-        sleep 3
+    # Initialize checkpoint flags
+    CHECKPOINT_1=false
+    CHECKPOINT_2=false
+    CHECKPOINT_3=false
+    CHECKPOINT_4=false
+    CHECKPOINT_5=false
+    CHECKPOINT_6=false
+    CHECKPOINT_7=false
+
+    while kill -0 $RESTORE_PID 2> /dev/null; do
+        sleep 3  # Poll every 3 seconds for status updates
+
+        # Read the last 100 lines of the log to detect certain key progress points
         LAST_LOG_LINES=$(tail -n 100 "$RESTORE_LOG")
+
+        # Check for checkpoints in the log
         if echo "$LAST_LOG_LINES" | grep -q "Now you can boot untrusted images." && [ "$CHECKPOINT_1" = false ]; then
             echo -e "${GREEN}Checkpoint 1: Connected to HomePod${RESET}"
             CHECKPOINT_1=true
@@ -197,11 +259,11 @@ function restore_homepod() {
             echo -e "${GREEN}Checkpoint 2: Opening IPSW${RESET}"
             CHECKPOINT_2=true
         fi
-        if echo "$LAST_LOG_LINES" | grep -q "No path for component iBEC" && [ "$CHECKPOINT_3" = false ]; then
+        if echo "$LAST_LOG_LINES" | grep -q "NOTE: No path for component iBEC in TSS, will fetch from build_identity" && [ "$CHECKPOINT_3" = false ]; then
             echo -e "${GREEN}Checkpoint 3: HomePod entered Recovery Mode${RESET}"
             CHECKPOINT_3=true
         fi
-        if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56" && [ "$CHECKPOINT_4" = false ]; then
+        if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56"         && [ "$CHECKPOINT_4" = false ]; then
             echo -e "${GREEN}Checkpoint 4: NAND Check${RESET}"
             CHECKPOINT_4=true
         fi
@@ -216,37 +278,35 @@ function restore_homepod() {
         if echo "$LAST_LOG_LINES" | grep -q "(check_mounted) result=0" && [ "$CHECKPOINT_7" = false ]; then
             echo -e "${GREEN}Checkpoint 7: Restore complete. Wait until this message disappears to unplug power from HomePod, turn right-side up and plug back in. Set up as normal.${RESET}"
             CHECKPOINT_7=true
-            sleep 45
+            
+            # Display the QR code for donation to Patreon
+            echo -e "${GREEN}Restore successful! If you'd like to support tihmstar for his work on this project, consider donating.${RESET}"
+            qrencode -t ANSIUTF8 "https://www.patreon.com/tihmstar"
+            
+            sleep 45  # Wait for 45 seconds before proceeding
+
+            
+
             echo -e "${YELLOW}Returning to the main menu...${RESET}"
             sleep 3
-            show_menu
-        fi
-
-        # Detect and handle non-critical failure messages without stopping
-        if echo "$LAST_LOG_LINES" | grep -q "ampctl failure" || echo "$LAST_LOG_LINES" | grep -q "RamrodErrorDomain"; then
-            echo -e "${YELLOW}Non-critical error detected (ampctl or RamrodErrorDomain). THIS IS NORMAL. Continuing...${RESET}"
-        fi
-
-        # Detect if the IPSW is no longer signed by Apple
-        if echo "$LAST_LOG_LINES" | grep -q "This device isn't eligible for the requested build"; then
-            echo -e "${RED}This IPSW is no longer signed by Apple, you will need a newer IPSW. Returning to main menu...${RESET}"
-            sleep 7
-            show_menu
+            show_menu  # Return to the main menu after the wait
         fi
     done
 
     wait $RESTORE_PID
     RESTORE_EXIT_CODE=$?
+    
+    kill $! 2>/dev/null  # Terminate the spinner process
+    printf "\n"  # Ensure a newline after the spinner stops
 
-    kill $! 2>/dev/null
-    printf "\n"
-
+    # Notify user about the result, and don't exit if it's a non-critical error
     if [ "$RESTORE_EXIT_CODE" -ne 0 ] && [ "$CHECKPOINT_7" = false ]; then
         echo -e "${YELLOW}Restore process encountered issues. Please check the full log: $RESTORE_LOG${RESET}"
     else
         echo -e "${GREEN}Restore process completed successfully. Full log saved: $RESTORE_LOG${RESET}"
     fi
 
+    # Return to the main menu
     show_menu
 }
 
