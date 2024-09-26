@@ -329,9 +329,83 @@ function update_script() {
     exec "$0"
 }
 
+
+# Function to make custom IPSW
 function create_custom_ipsw() {
-    echo "This option is reserved for creating a custom IPSW."
-    echo "Returning to the main menu..."
+    echo -e "${YELLOW}Creating custom IPSW...${RESET}"
+    
+    # Define the URL for the makeipsw.sh script
+    MAKEIPSW_SCRIPT_URL="https://raw.githubusercontent.com/tihmstar/homepodstuff/main/makeipsw.sh"
+    SCRIPT_DIR=$(dirname "$(realpath "$0")")
+    MAKEIPSW_SCRIPT="$SCRIPT_DIR/makeipsw.sh"
+
+    # Download the makeipsw.sh script
+    echo -e "${YELLOW}Downloading makeipsw.sh...${RESET}"
+    curl -L -o "$MAKEIPSW_SCRIPT" "$MAKEIPSW_SCRIPT_URL"
+    chmod +x "$MAKEIPSW_SCRIPT"
+    
+    # Prompt user for OTA file
+    echo -e "${YELLOW}Please note it is much easier to use a pre-made IPSW file, only use this tool if you understand the steps involved.${RESET}"
+    echo -e "${YELLOW}You will need to download a signed OTA file from here: https://ipsw.me/otas/AudioAccessory1,1${RESET}"
+    echo -e "${YELLOW}Please drag and drop the OTA file (.zip format) into this window and press Enter.${RESET}"
+    read -r OTA_FILE_PATH
+    OTA_FILE_PATH=$(echo "$OTA_FILE_PATH" | sed 's/\\//g')  # Handle any escape sequences
+
+    # Check the extension
+    OTA_EXTENSION="${OTA_FILE_PATH##*.}"
+
+    if [[ "$OTA_EXTENSION" != "zip" ]]; then
+        echo -e "${RED}Invalid OTA file. Must be a .zip file.${RESET}"
+        return
+    fi
+
+    # Prompt user for firmware keys file
+    echo -e "${YELLOW}You will need to download valid keys from here or generate your own: https://github.com/UnbendableStraw/homepod-restore/blob/main/firmware_keys.zip${RESET}"
+    echo -e "${YELLOW}Please drag and drop the firmware keys file (.zip format) into this window and press Enter.${RESET}"
+    read -r KEYS_FILE_PATH
+    KEYS_FILE_PATH=$(echo "$KEYS_FILE_PATH" | sed 's/\\//g')  # Handle any escape sequences
+
+    # Check the extension
+    KEYS_EXTENSION="${KEYS_FILE_PATH##*.}"
+
+    if [[ "$KEYS_EXTENSION" != "zip" ]]; then
+        echo -e "${RED}Invalid firmware keys file. Must be a .zip file.${RESET}"
+        return
+    fi
+
+    # Prompt user for the base IPSW file
+    echo -e "${YELLOW}You will need to download a signed OTA file from here: https://ipsw.me/AppleTV5,3${RESET}"
+    echo -e "${YELLOW}Please drag and drop the base IPSW file (.ipsw format) into this window and press Enter.${RESET}"
+    read -r IPSW_FILE_PATH
+    IPSW_FILE_PATH=$(echo "$IPSW_FILE_PATH" | sed 's/\\//g')  # Handle any escape sequences
+
+    # Check the extension
+    IPSW_EXTENSION="${IPSW_FILE_PATH##*.}"
+
+    if [[ "$IPSW_EXTENSION" != "ipsw" ]]; then
+        echo -e "${RED}Invalid IPSW file. Must be a .ipsw file.${RESET}"
+        return
+    fi
+
+    # Set output path in the current script directory
+    OUTPUT_IPSW="$SCRIPT_DIR/custom_homepod_restore.ipsw"
+
+    # Run the makeipsw.sh script with the provided files
+    echo -e "${YELLOW}Running makeipsw.sh to create the custom IPSW...${RESET}"
+    "$MAKEIPSW_SCRIPT" "$OTA_FILE_PATH" "$IPSW_FILE_PATH" "$OUTPUT_IPSW" "$KEYS_FILE_PATH"
+
+    # Check if the script succeeded
+    if [[ $? -eq 0 ]]; then
+        echo -e "${GREEN}Custom IPSW created successfully at: $OUTPUT_IPSW${RESET}"
+        # Automatically update the IPSW path
+        echo -e "${YELLOW}Updating IPSW path to: $OUTPUT_IPSW${RESET}"
+        uupdate_script_with_ipsw_path "$OUTPUT_IPSW"
+    else
+        echo -e "${RED}Failed to create custom IPSW. Please check the inputs and try again.${RESET}"
+    fi
+
+    # Return to the main menu
+    echo -e "${YELLOW}Returning to the main menu...${RESET}"
     sleep 5
     show_menu
 }
@@ -346,7 +420,7 @@ function show_menu() {
     echo ""
     echo "1) Check/Install Dependencies"
     echo "2) Restore HomePod"
-    echo "3) Create a Custom IPSW (COMING SOON)"
+    echo "3) Create a Custom IPSW"
     echo "4) Update IPSW File Location"
     echo "5) Download Pre-built IPSW"
     echo "6) Update This Script"
