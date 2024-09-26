@@ -338,8 +338,12 @@ function create_custom_ipsw() {
 
 function show_menu() {
     clear
-    echo "HomePod Restore Tool"
-    echo "Please choose an option:"
+    echo -e "\033[1m==============================\033[0m"
+    echo -e "\033[1m||   HomePod Restore Tool   ||\033[0m"
+    echo -e "\033[1m==============================\033[0m"
+    echo ""
+    echo -e "\033[4mPlease choose an option:\033[0m"
+    echo ""
     echo "1) Check/Install Dependencies"
     echo "2) Restore HomePod"
     echo "3) Create a Custom IPSW (COMING SOON)"
@@ -347,7 +351,7 @@ function show_menu() {
     echo "5) Download Pre-built IPSW"
     echo "6) Update This Script"
     echo "7) Exit"
-    echo -e "${GREEN}If you'd like to support tihmstar for his work on this project, consider donating.${RESET}"
+    echo -e "${GREEN}Many thanks to David Ryskalczyk and tihmstar for the tools used in this project. If you'd like to support tihmstar, consider becoming a Patron.${RESET}"
     echo "█████████████████████████████████"
     echo "█████████████████████████████████"
     echo "████ ▄▄▄▄▄ █▀▀█ ▀   ██ ▄▄▄▄▄ ████"
