@@ -9,7 +9,7 @@ RESET='\033[0m'
 # Variables
 DOWNLOADS_DIR="$HOME/Downloads"
 IPSW_FILE_PATH=""
-CURRENT_IPSW_PATH="/Users/john/Downloads/17.6.ipsw"
+CURRENT_IPSW_PATH=""
 
 BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "idevicerestore" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
 IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/17.6.ipsw"
