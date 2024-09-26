@@ -15,7 +15,7 @@ CURRENT_IPSW_PATH=""
 IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/18.0.ipsw"
 
 # Variables
-BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w" "qrencode")
+BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
 SPECIFIC_IDEVICERESTORE_REVISION="d2e1c4f"  # The specific revision you want to install
 
 # Function to install specific revision of idevicerestore
@@ -101,7 +101,7 @@ function install_dependencies() {
     # Install the specific idevicerestore revision
     install_specific_idevicerrestore_revision
 
-    # Install the rest of the dependencies including qrencode
+    
     for dep in "${BREW_DEPENDENCIES[@]}"; do
         if ! brew list $dep &> /dev/null; then
             echo "Installing $dep..."
@@ -279,9 +279,7 @@ function restore_homepod() {
             echo -e "${GREEN}Checkpoint 7: Restore complete. Wait until this message disappears to unplug power from HomePod, turn right-side up and plug back in. Set up as normal.${RESET}"
             CHECKPOINT_7=true
             
-            # Display the QR code for donation to Patreon
-            echo -e "${GREEN}Restore successful! If you'd like to support tihmstar for his work on this project, consider donating.${RESET}"
-            qrencode -t ANSIUTF8 "https://www.patreon.com/tihmstar"
+            
             
             sleep 45  # Wait for 45 seconds before proceeding
 
@@ -349,7 +347,29 @@ function show_menu() {
     echo "5) Download Pre-built IPSW"
     echo "6) Update This Script"
     echo "7) Exit"
+    echo -e "${GREEN}If you'd like to support tihmstar for his work on this project, consider donating.${RESET}"
+    echo "█████████████████████████████████"
+    echo "█████████████████████████████████"
+    echo "████ ▄▄▄▄▄ █▀▀█ ▀   ██ ▄▄▄▄▄ ████"
+    echo "████ █   █ █▄█ ▀ █ ▀██ █   █ ████"
+    echo "████ █▄▄▄█ █ ▀█▄▀█▄ ▄█ █▄▄▄█ ████"
+    echo "████▄▄▄▄▄▄▄█ ▀▄▀ █▄█ █▄▄▄▄▄▄▄████"
+    echo "████ ▄▀ █▀▄▄█ ▀█ ▄██▀█ ▄▄█▄▄▀████"
+    echo "████ ▀ █ ▄▄▄█ ██▄▀▀▀▀  █▀██▄▄████"
+    echo "█████ ███▀▄█ ▀ ▄ ▄███▄  █ ▀▄ ████"
+    echo "████▄▀▄ ▄ ▄ █ ▀ █ ▀▀██ ▄ █▄▀▄████"
+    echo "████▄▄▄▄▄▄▄▄▀▄▄  █▀▀ ▄▄▄  ▄█▀████"
+    echo "████ ▄▄▄▄▄ █▄▄▀▀ ▄▀▄ █▄█  ▀ ▄████"
+    echo "████ █   █ █▀▀ ▄▀▄▄▀▄ ▄   ▀  ████"
+    echo "████ █▄▄▄█ █▀▄█▀▀ ██▀▀▀▄▄▀▄█▄████"
+    echo "████▄▄▄▄▄▄▄█▄▄█▄▄▄▄▄▄██▄███▄▄████"
+    echo "█████████████████████████████████"
+    echo "█████████████████████████████████"
+    
     read -p "Enter Selection [1-7]: " choice
+    
+    
+    
 
     case $choice in
         1)
