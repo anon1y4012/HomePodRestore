@@ -89,17 +89,25 @@ function prompt_for_ipsw_path() {
     fi
 }
 
+# Function to update the script with the new IPSW file path
 function update_script_with_ipsw_path() {
     local new_path="$1"
-    escaped_new_path=$(echo "$new_path" | sed 's/\//\\\//g')
-    sed -i  "s|^CURRENT_IPSW_PATH=.*|CURRENT_IPSW_PATH=\"$escaped_new_path\"|" "$0"
+    
+    # Escape slashes and other special characters in the file path for sed
+    escaped_new_path=$(printf '%s' "$new_path" | sed 's/[&/\]/\\&/g')
+
+    # Use sed to replace the CURRENT_IPSW_PATH with the new path
+    sed -i '' "s|^CURRENT_IPSW_PATH=.*|CURRENT_IPSW_PATH=\"$escaped_new_path\"|" "$0"
+    
+    # Update the global variable for the current session
     CURRENT_IPSW_PATH="$new_path"
+    
     echo -e "${GREEN}IPSW file path successfully updated to: $new_path${RESET}"
 }
 
 function download_ipsw() {
     SCRIPT_DIR=$(dirname "$(realpath "$0")")
-    IPSW_DEST_PATH="$SCRIPT_DIR/17.6.ipsw"
+    IPSW_DEST_PATH="$SCRIPT_DIR/audioOS.ipsw"
     if [[ -f "$IPSW_DEST_PATH" ]]; then
         echo -e "${YELLOW}IPSW file already exists at $IPSW_DEST_PATH. Skipping download...${RESET}"
         update_script_with_ipsw_path "$IPSW_DEST_PATH"
@@ -114,7 +122,7 @@ function download_ipsw() {
         fi
     fi
     echo "Returning to the main menu..."
-    sleep 3
+    sleep 15
     show_menu
 }
 
