@@ -10,49 +10,44 @@ RESET='\033[0m'
 DOWNLOADS_DIR="$HOME/Downloads"
 IPSW_FILE_PATH=""
 CURRENT_IPSW_PATH=""
-
-
 IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/18.0.ipsw"
-
-# Variables
 BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
-SPECIFIC_IDEVICERESTORE_REVISION="d2e1c4f"  # The specific revision you want to install
+SPECIFIC_IDEVICERESTORE_REVISION="d2e1c4f"  # Specific idevicerestore revision to install
 
-# Function to install specific revision of idevicerestore
+# Kill any running idevicerestore processes
+function kill_idevicerestore() {
+    if pgrep idevicerestore >/dev/null; then
+        echo -e "${YELLOW}Killing any running idevicerestore processes...${RESET}"
+        killall idevicerestore
+    fi
+}
+
+# Install specific idevicerestore revision
 function install_specific_idevicerrestore_revision() {
     echo -e "${YELLOW}Installing specific idevicerestore revision (${SPECIFIC_IDEVICERESTORE_REVISION})...${RESET}"
     
-    # Get the formula file path for idevicerestore
     FORMULA_PATH=$(brew --repo d235j/homebrew-ios-restore-tools)/Formula/idevicerestore.rb
-
-    # Check if the formula exists
     if [[ -f "$FORMULA_PATH" ]]; then
         echo "Found idevicerestore.rb at $FORMULA_PATH"
-        
-        # Replace the head reference with the specific commit
         sed -i '' 's|head "https://github.com/libimobiledevice/idevicerestore.git"|head "https://github.com/libimobiledevice/idevicerestore.git", revision: "d2e1c4f"|' "$FORMULA_PATH"
-        
-        # Uninstall current version of idevicerestore
         brew uninstall idevicerestore --ignore-dependencies
-        
-        # Install the specific idevicerestore revision
         brew install --HEAD idevicerestore
     else
         echo -e "${RED}Failed to locate idevicerestore formula file. Ensure the Homebrew tap is installed.${RESET}"
     fi
 }
 
-# Function to trap CTRL+C and return to the main menu
+# Trap CTRL+C and return to the main menu
 trap ctrl_c INT
 
-# CTRL+C handler to return to the main menu
 function ctrl_c() {
     echo -e "\n${YELLOW}Process interrupted. Returning to the main menu...${RESET}"
+    kill_idevicerestore
     sleep 3
     show_menu
 }
 
-# Functions
+# Check Homebrew installation and install dependencies
 function check_homebrew() {
     echo -e "${YELLOW}Press CTRL+C at any time to return to the main menu.${RESET}"
     if ! command -v brew &> /dev/null; then
@@ -77,6 +72,7 @@ function check_homebrew() {
     show_menu
 }
 
+# Spinner function for process wait times
 function spinner() {
     local pid=$1
     local delay=0.1
@@ -91,17 +87,12 @@ function spinner() {
     printf "\b\b\b\b\b\b"
 }
 
-
-# Function to install dependencies
+# Install dependencies
 function install_dependencies() {
     echo -e "${YELLOW}Press CTRL+C at any time to return to the main menu.${RESET}"
     echo "Tapping d235j/ios-restore-tools..."
     brew tap d235j/ios-restore-tools
-
-    # Install the specific idevicerestore revision
     install_specific_idevicerrestore_revision
-
-    
     for dep in "${BREW_DEPENDENCIES[@]}"; do
         if ! brew list $dep &> /dev/null; then
             echo "Installing $dep..."
@@ -112,6 +103,7 @@ function install_dependencies() {
     done
 }
 
+# Prompt for IPSW path
 function prompt_for_ipsw_path() {
     echo "Please drag and drop the IPSW file into this window and press Enter."
     read -r IPSW_FILE_PATH
@@ -124,22 +116,16 @@ function prompt_for_ipsw_path() {
     fi
 }
 
-# Function to update the script with the new IPSW file path
+# Update the script with the new IPSW file path
 function update_script_with_ipsw_path() {
     local new_path="$1"
-    
-    # Escape slashes and other special characters in the file path for sed
     escaped_new_path=$(printf '%s' "$new_path" | sed 's/[&/\]/\\&/g')
-
-    # Use sed to replace the CURRENT_IPSW_PATH with the new path
     sed -i '' "s|^CURRENT_IPSW_PATH=.*|CURRENT_IPSW_PATH=\"$escaped_new_path\"|" "$0"
-    
-    # Update the global variable for the current session
     CURRENT_IPSW_PATH="$new_path"
-    
     echo -e "${GREEN}IPSW file path successfully updated to: $new_path${RESET}"
 }
 
+# Download IPSW
 function download_ipsw() {
     SCRIPT_DIR=$(dirname "$(realpath "$0")")
     IPSW_DEST_PATH="$SCRIPT_DIR/audioOS.ipsw"
@@ -161,6 +147,7 @@ function download_ipsw() {
     show_menu
 }
 
+# Update IPSW path
 function update_ipsw_path() {
     echo "Updating the IPSW file location..."
     prompt_for_ipsw_path
@@ -170,6 +157,7 @@ function update_ipsw_path() {
     show_menu
 }
 
+# Get IPSW path
 function get_ipsw_path() {
     if [[ -z "$CURRENT_IPSW_PATH" || ! -f "$CURRENT_IPSW_PATH" ]]; then
         echo "No valid IPSW file path found. Please provide the IPSW file path."
@@ -179,63 +167,48 @@ function get_ipsw_path() {
     fi
 }
 
+# Check if a device is connected in DFU mode
 function check_device_in_dfu() {
     echo -e "${YELLOW}Checking if a HomePod is connected in DFU mode... This may take up to 10 seconds.${RESET}"
-    
-    # Run irecovery with a timeout and capture the output
     device_info=$(irecovery -q 2>&1)
-
-    # Check for specific error message
     if echo "$device_info" | grep -q "ERROR: Unable to connect to device"; then
         echo -e "${RED}No device detected in DFU mode. Please connect your HomePod in DFU mode and try again.${RESET}"
-        return 1  # Return error code 1 if no device is found
+        return 1
     else
         echo -e "${GREEN}HomePod detected in DFU mode.${RESET}"
-        return 0  # Return success code 0 if the device is found
+        return 0
     fi
 }
 
-# Function to restore the HomePod
+# Restore the HomePod
 function restore_homepod() {
     echo -e "${YELLOW}Starting HomePod restore process... Press CTRL+C at any time to return to the main menu.${RESET}"
-
-    # Check if the device is connected in DFU mode
     check_device_in_dfu
     if [[ $? -ne 0 ]]; then
         sleep 3
-        show_menu  # Return to the main menu if the device is not detected
+        show_menu
         return
     fi
-
-    # Ensure IPSW file path is set and valid
     get_ipsw_path
-
     if [[ ! -f "$CURRENT_IPSW_PATH" ]]; then
         echo "Error: IPSW file not found at $CURRENT_IPSW_PATH. Please update the IPSW file location."
         update_script_with_ipsw_path
         return
     fi
 
-    # Log file setup, and continue with gaster commands, idevicerestore, etc.
     SCRIPT_DIR=$(dirname "$(realpath "$0")")
     RESTORE_LOG="$SCRIPT_DIR/restore_log_$(date +%Y%m%d_%H%M%S).txt"
-
     echo -e "${YELLOW}Logging full output to $RESTORE_LOG${RESET}"
 
-    echo "Preparing device for restore..."
     gaster pwn >> "$RESTORE_LOG" 2>&1
     gaster reset >> "$RESTORE_LOG" 2>&1
 
     echo -e "${YELLOW}Restore process started. Follow these checkpoints.${RESET}"
-
-    # Run idevicerestore and capture its output
     idevicerestore -d -e "$CURRENT_IPSW_PATH" >> "$RESTORE_LOG" 2>&1 &
     RESTORE_PID=$!
     
-    # Start the spinner while the restore process is running
     spinner $RESTORE_PID &
 
-    # Initialize checkpoint flags
     CHECKPOINT_1=false
     CHECKPOINT_2=false
     CHECKPOINT_3=false
@@ -245,12 +218,9 @@ function restore_homepod() {
     CHECKPOINT_7=false
 
     while kill -0 $RESTORE_PID 2> /dev/null; do
-        sleep 3  # Poll every 3 seconds for status updates
-
-        # Read the last 100 lines of the log to detect certain key progress points
+        sleep 3  
         LAST_LOG_LINES=$(tail -n 100 "$RESTORE_LOG")
 
-        # Check for checkpoints in the log
         if echo "$LAST_LOG_LINES" | grep -q "Now you can boot untrusted images." && [ "$CHECKPOINT_1" = false ]; then
             echo -e "${GREEN}Checkpoint 1: Connected to HomePod${RESET}"
             CHECKPOINT_1=true
@@ -263,7 +233,7 @@ function restore_homepod() {
             echo -e "${GREEN}Checkpoint 3: Entering Recovery Mode${RESET}"
             CHECKPOINT_3=true
         fi
-        if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56"         && [ "$CHECKPOINT_4" = false ]; then
+        if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56" && [ "$CHECKPOINT_4" = false ]; then
             echo -e "${GREEN}Checkpoint 4: NAND Check${RESET}"
             CHECKPOINT_4=true
         fi
@@ -278,48 +248,38 @@ function restore_homepod() {
         if echo "$LAST_LOG_LINES" | grep -q "(check_mounted) result=0" && [ "$CHECKPOINT_7" = false ]; then
             echo -e "${GREEN}Checkpoint 7: Restore complete. Wait until this message disappears to unplug power from HomePod, turn right-side up and plug back in. Set up as normal.${RESET}"
             CHECKPOINT_7=true
-            
-            
-            
-            sleep 45  # Wait for 45 seconds before proceeding
-
-            
-
+            sleep 45
             echo -e "${YELLOW}Returning to the main menu...${RESET}"
             sleep 3
-            show_menu  # Return to the main menu after the wait
+            show_menu
         fi
-        
-        # Detect if the device fails to reconnect in recovery mode (possible hardware failure)
+
         if echo "$LAST_LOG_LINES" | grep -q "ERROR: Device did not reconnect in recovery mode. Possibly invalid iBEC" || echo "$LAST_LOG_LINES" | grep -q "ERROR: Unable to place device into recovery mode from DFU mode"; then
             echo -e "${RED}Unable to place device into recovery mode. This could be due to a hardware fault.${RESET}"
-            echo -e "${YELLOW}Unplug the HomePod from power and try again. If you see this error repeatedly, you likely have a hardware failure. Returning to main menu...${RESET}"
-            sleep 15  # Allow the user to read the message
-            show_menu  # Return to the main menu
+            echo -e "${YELLOW}Unplug the HomePod from power and try again. If you see this error repeatedly, you likely have a hardware failure.${RESET}"
+            sleep 15
+            show_menu
         fi
-        
     done
 
     wait $RESTORE_PID
     RESTORE_EXIT_CODE=$?
-    
-    kill $! 2>/dev/null  # Terminate the spinner process
-    printf "\n"  # Ensure a newline after the spinner stops
 
-    # Notify user about the result, and don't exit if it's a non-critical error
+    kill $! 2>/dev/null  
+    printf "\n"
+
     if [ "$RESTORE_EXIT_CODE" -ne 0 ] && [ "$CHECKPOINT_7" = false ]; then
         echo -e "${YELLOW}Restore process encountered issues. Please check the full log: $RESTORE_LOG${RESET}"
     else
         echo -e "${GREEN}Restore process completed successfully. Full log saved: $RESTORE_LOG${RESET}"
     fi
 
-    # Return to the main menu
     show_menu
 }
 
+# Function to update the script with the latest version
 function update_script() {
     echo -e "${YELLOW}Checking for script updates...${RESET}"
-
     SCRIPT_URL="https://raw.githubusercontent.com/anon1y4012/HomePodRestore/main/restorer.sh"
     TEMP_SCRIPT="/tmp/latest_homepod_restore_script.sh"
     curl -L -o "$TEMP_SCRIPT" "$SCRIPT_URL"
@@ -338,29 +298,20 @@ function update_script() {
     exec "$0"
 }
 
-
-# Function to make custom IPSW
+# Function to create a custom IPSW
 function create_custom_ipsw() {
     echo -e "${YELLOW}Creating custom IPSW...${RESET}"
-    
-    # Define the URL for the makeipsw.sh script
     MAKEIPSW_SCRIPT_URL="https://raw.githubusercontent.com/tihmstar/homepodstuff/main/makeipsw.sh"
     SCRIPT_DIR=$(dirname "$(realpath "$0")")
     MAKEIPSW_SCRIPT="$SCRIPT_DIR/makeipsw.sh"
 
-    # Download the makeipsw.sh script
     echo -e "${YELLOW}Downloading makeipsw.sh...${RESET}"
     curl -L -o "$MAKEIPSW_SCRIPT" "$MAKEIPSW_SCRIPT_URL"
     chmod +x "$MAKEIPSW_SCRIPT"
-    
-    # Prompt user for OTA file
-    echo -e "${YELLOW}Please note it is much easier to use a pre-made IPSW file, only use this tool if you understand the steps involved.${RESET}"
-    echo -e "${YELLOW}You will need to download a signed OTA file from here: https://ipsw.me/otas/AudioAccessory1,1${RESET}"
+
     echo -e "${YELLOW}Please drag and drop the OTA file (.zip format) into this window and press Enter.${RESET}"
     read -r OTA_FILE_PATH
-    OTA_FILE_PATH=$(echo "$OTA_FILE_PATH" | sed 's/\\//g')  # Handle any escape sequences
-
-    # Check the extension
+    OTA_FILE_PATH=$(echo "$OTA_FILE_PATH" | sed 's/\\//g')
     OTA_EXTENSION="${OTA_FILE_PATH##*.}"
 
     if [[ "$OTA_EXTENSION" != "zip" ]]; then
@@ -368,13 +319,9 @@ function create_custom_ipsw() {
         return
     fi
 
-    # Prompt user for firmware keys file
-    echo -e "${YELLOW}You will need to download valid keys from here or generate your own: https://github.com/UnbendableStraw/homepod-restore/blob/main/firmware_keys.zip${RESET}"
     echo -e "${YELLOW}Please drag and drop the firmware keys file (.zip format) into this window and press Enter.${RESET}"
     read -r KEYS_FILE_PATH
-    KEYS_FILE_PATH=$(echo "$KEYS_FILE_PATH" | sed 's/\\//g')  # Handle any escape sequences
-
-    # Check the extension
+    KEYS_FILE_PATH=$(echo "$KEYS_FILE_PATH" | sed 's/\\//g')
     KEYS_EXTENSION="${KEYS_FILE_PATH##*.}"
 
     if [[ "$KEYS_EXTENSION" != "zip" ]]; then
@@ -382,13 +329,9 @@ function create_custom_ipsw() {
         return
     fi
 
-    # Prompt user for the base IPSW file
-    echo -e "${YELLOW}You will need to download a signed OTA file from here: https://ipsw.me/AppleTV5,3${RESET}"
     echo -e "${YELLOW}Please drag and drop the base IPSW file (.ipsw format) into this window and press Enter.${RESET}"
     read -r IPSW_FILE_PATH
-    IPSW_FILE_PATH=$(echo "$IPSW_FILE_PATH" | sed 's/\\//g')  # Handle any escape sequences
-
-    # Check the extension
+    IPSW_FILE_PATH=$(echo "$IPSW_FILE_PATH" | sed 's/\\//g')
     IPSW_EXTENSION="${IPSW_FILE_PATH##*.}"
 
     if [[ "$IPSW_EXTENSION" != "ipsw" ]]; then
@@ -396,30 +339,26 @@ function create_custom_ipsw() {
         return
     fi
 
-    # Set output path in the current script directory
     OUTPUT_IPSW="$SCRIPT_DIR/custom_homepod_restore.ipsw"
-
-    # Run the makeipsw.sh script with the provided files
     echo -e "${YELLOW}Running makeipsw.sh to create the custom IPSW...${RESET}"
     "$MAKEIPSW_SCRIPT" "$OTA_FILE_PATH" "$IPSW_FILE_PATH" "$OUTPUT_IPSW" "$KEYS_FILE_PATH"
 
-    # Check if the script succeeded
     if [[ $? -eq 0 ]]; then
         echo -e "${GREEN}Custom IPSW created successfully at: $OUTPUT_IPSW${RESET}"
-        # Automatically update the IPSW path
         echo -e "${YELLOW}Updating IPSW path to: $OUTPUT_IPSW${RESET}"
         update_script_with_ipsw_path "$OUTPUT_IPSW"
     else
         echo -e "${RED}Failed to create custom IPSW. Please check the inputs and try again.${RESET}"
     fi
 
-    # Return to the main menu
     echo -e "${YELLOW}Returning to the main menu...${RESET}"
     sleep 5
     show_menu
 }
 
+# Main menu display
 function show_menu() {
+    kill_idevicerestore
     clear
     echo -e "\033[1m==============================\033[0m"
     echo -e "\033[1m||   HomePod Restore Tool   ||\033[0m"
@@ -452,11 +391,8 @@ function show_menu() {
     echo "████▄▄▄▄▄▄▄█▄▄█▄▄▄▄▄▄██▄███▄▄████"
     echo "█████████████████████████████████"
     echo "█████████████████████████████████"
-    
+
     read -p "Enter Selection [1-7]: " choice
-    
-    
-    
 
     case $choice in
         1)
@@ -479,6 +415,8 @@ function show_menu() {
             update_script
             ;;
         7)
+            kill_idevicerestore
+            echo "Exiting script..."
             exit 0
             ;;
         *)
