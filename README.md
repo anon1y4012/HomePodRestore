@@ -11,6 +11,6 @@ chmod +x /path/to/restorer.sh
 ```bash
 bash /path/to/restorer.sh
 ```
-It is advised to run the dependency check at least once to verify the latest version of all tools.
+It is HIGHLY advised to run the dependency check at least once to verify the correct version of all tools, as some are a different version than the latest release on GitHub.
 
 Check logs for errors during output.
