@@ -260,7 +260,7 @@ function restore_homepod() {
             CHECKPOINT_2=true
         fi
         if echo "$LAST_LOG_LINES" | grep -q "NOTE: No path for component iBEC in TSS, will fetch from build_identity" && [ "$CHECKPOINT_3" = false ]; then
-            echo -e "${GREEN}Checkpoint 3: HomePod entered Recovery Mode${RESET}"
+            echo -e "${GREEN}Checkpoint 3: Entering Recovery Mode${RESET}"
             CHECKPOINT_3=true
         fi
         if echo "$LAST_LOG_LINES" | grep -q "BoardID: 56"         && [ "$CHECKPOINT_4" = false ]; then
@@ -289,6 +289,15 @@ function restore_homepod() {
             sleep 3
             show_menu  # Return to the main menu after the wait
         fi
+        
+        # Detect if the device fails to reconnect in recovery mode (possible hardware failure)
+        if echo "$LAST_LOG_LINES" | grep -q "ERROR: Device did not reconnect in recovery mode. Possibly invalid iBEC" || echo "$LAST_LOG_LINES" | grep -q "ERROR: Unable to place device into recovery mode from DFU mode"; then
+            echo -e "${RED}Unable to place device into recovery mode. This could be due to a hardware fault.${RESET}"
+            echo -e "${YELLOW}Unplug the HomePod from power and try again. If you see this error repeatedly, you likely have a hardware failure. Returning to main menu...${RESET}"
+            sleep 15  # Allow the user to read the message
+            show_menu  # Return to the main menu
+        fi
+        
     done
 
     wait $RESTORE_PID
@@ -399,7 +408,7 @@ function create_custom_ipsw() {
         echo -e "${GREEN}Custom IPSW created successfully at: $OUTPUT_IPSW${RESET}"
         # Automatically update the IPSW path
         echo -e "${YELLOW}Updating IPSW path to: $OUTPUT_IPSW${RESET}"
-        uupdate_script_with_ipsw_path "$OUTPUT_IPSW"
+        update_script_with_ipsw_path "$OUTPUT_IPSW"
     else
         echo -e "${RED}Failed to create custom IPSW. Please check the inputs and try again.${RESET}"
     fi
