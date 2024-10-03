@@ -12,28 +12,12 @@ IPSW_FILE_PATH=""
 CURRENT_IPSW_PATH=""
 IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/18.0.ipsw"
 BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
-SPECIFIC_IDEVICERESTORE_REVISION="d2e1c4f"  # Specific idevicerestore revision to install
 
 # Kill any running idevicerestore processes
 function kill_idevicerestore() {
     if pgrep idevicerestore >/dev/null; then
         echo -e "${YELLOW}Killing any running idevicerestore processes...${RESET}"
         killall idevicerestore
-    fi
-}
-
-# Install specific idevicerestore revision
-function install_specific_idevicerrestore_revision() {
-    echo -e "${YELLOW}Installing specific idevicerestore revision (${SPECIFIC_IDEVICERESTORE_REVISION})...${RESET}"
-    
-    FORMULA_PATH=$(brew --repo d235j/homebrew-ios-restore-tools)/Formula/idevicerestore.rb
-    if [[ -f "$FORMULA_PATH" ]]; then
-        echo "Found idevicerestore.rb at $FORMULA_PATH"
-        sed -i '' 's|head "https://github.com/libimobiledevice/idevicerestore.git"|head "https://github.com/libimobiledevice/idevicerestore.git", revision: "d2e1c4f"|' "$FORMULA_PATH"
-        brew uninstall idevicerestore --ignore-dependencies
-        brew install --HEAD idevicerestore
-    else
-        echo -e "${RED}Failed to locate idevicerestore formula file. Ensure the Homebrew tap is installed.${RESET}"
     fi
 }
 
@@ -87,20 +71,59 @@ function spinner() {
     printf "\b\b\b\b\b\b"
 }
 
-# Install dependencies
+# Install dependencies, including head-only formulas
 function install_dependencies() {
     echo -e "${YELLOW}Press CTRL+C at any time to return to the main menu.${RESET}"
     echo "Tapping d235j/ios-restore-tools..."
     brew tap d235j/ios-restore-tools
-    install_specific_idevicerrestore_revision
+
+    # Install idevicerestore latest version
+    brew install idevicerestore
+
+    # Install the regular dependencies
     for dep in "${BREW_DEPENDENCIES[@]}"; do
-        if ! brew list $dep &> /dev/null; then
+        if ! brew list "$dep" &> /dev/null; then
             echo "Installing $dep..."
             brew install "$dep"
         else
             echo "$dep is already installed."
         fi
     done
+
+    # Install head-only formulas explicitly
+    echo "Installing head-only formulas..."
+
+    # Install gaster (head-only)
+    if ! brew list gaster &> /dev/null; then
+        echo "Installing gaster..."
+        brew install --HEAD d235j/ios-restore-tools/gaster
+    else
+        echo "gaster is already installed."
+    fi
+
+    # Install tsschecker (head-only)
+    if ! brew list tsschecker &> /dev/null; then
+        echo "Installing tsschecker..."
+        brew install --HEAD d235j/ios-restore-tools/tsschecker
+    else
+        echo "tsschecker is already installed."
+    fi
+
+    # Install img4tool (head-only)
+    if ! brew list img4tool &> /dev/null; then
+        echo "Installing img4tool..."
+        brew install --HEAD d235j/ios-restore-tools/img4tool
+    else
+        echo "img4tool is already installed."
+    fi
+
+    # Install ra1nsn0w (head-only)
+    if ! brew list ra1nsn0w &> /dev/null; then
+        echo "Installing ra1nsn0w..."
+        brew install --HEAD d235j/ios-restore-tools/ra1nsn0w
+    else
+        echo "ra1nsn0w is already installed."
+    fi
 }
 
 # Prompt for IPSW path
@@ -229,7 +252,7 @@ function restore_homepod() {
             echo -e "${GREEN}Checkpoint 2: Opening IPSW${RESET}"
             CHECKPOINT_2=true
         fi
-        if echo "$LAST_LOG_LINES" | grep -q "NOTE: No path for component iBEC in TSS, will fetch from build_identity" && [ "$CHECKPOINT_3" = false ]; then
+        if echo "$LAST_LOG_LINES" | grep -q "NOTE        : No path for component iBEC in TSS, will fetch from build_identity" && [ "$CHECKPOINT_3" = false ]; then
             echo -e "${GREEN}Checkpoint 3: Entering Recovery Mode${RESET}"
             CHECKPOINT_3=true
         fi
