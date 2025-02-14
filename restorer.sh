@@ -10,7 +10,7 @@ RESET='\033[0m'
 DOWNLOADS_DIR="$HOME/Downloads"
 IPSW_FILE_PATH=""
 CURRENT_IPSW_PATH=""
-IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/18.2.ipsw"
+IPSW_DOWNLOAD_URL="https://nicsfix.com/ipsw/18.3.ipsw"
 BREW_DEPENDENCIES=("libimobiledevice-glue" "libimobiledevice" "libirecovery" "gaster" "ldid-procursus" "tsschecker" "img4tool" "ra1nsn0w")
 
 # Kill any running idevicerestore processes
