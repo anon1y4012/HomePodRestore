@@ -124,6 +124,14 @@ function install_dependencies() {
     else
         echo "ra1nsn0w is already installed."
     fi
+
+    # Install libtatsu (head-only)
+    if ! brew list libtatsu &> /dev/null; then
+        echo "Installing libtatsu..."
+        brew install --HEAD d235j/ios-restore-tools/libtatsu
+    else
+        echo "libtatsu is already installed."
+    fi
 }
 
 # Prompt for IPSW path
@@ -274,6 +282,13 @@ function restore_homepod() {
             sleep 45
             echo -e "${YELLOW}Returning to the main menu...${RESET}"
             sleep 3
+            show_menu
+        fi
+
+        # New error check for missing device serial number
+        if echo "$LAST_LOG_LINES" | grep -q "ERROR: could not retrieve device serial number. Can't continue."; then
+            echo -e "${RED}Error: Could not retrieve device serial number. This likely indicates a hardware failure. Please try again or check your device.${RESET}"
+            sleep 15
             show_menu
         fi
 
